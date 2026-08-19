@@ -1,0 +1,4 @@
+tag,provider,model,calls,tokens,latency_s,retries
+answer,openai,gpt-4o-mini,7,5551,16.81,0
+gen,openai,gpt-4o-mini,9,5223,15.23,0
+seed,openai,gpt-4o-mini,10,1392,15.34,0

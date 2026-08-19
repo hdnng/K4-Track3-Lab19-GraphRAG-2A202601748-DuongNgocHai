@@ -1,0 +1,5 @@
+threshold,audit_rows,MERGE_VECTOR,REJECT_GUARD,MERGE_MANUAL,so_entity_canonical
+0.8,23,7,2,3,387
+0.85,23,5,1,3,389
+0.9,23,3,0,3,391
+0.95,23,1,0,3,393

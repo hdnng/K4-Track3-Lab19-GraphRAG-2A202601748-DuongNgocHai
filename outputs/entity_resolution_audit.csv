@@ -1,0 +1,24 @@
+type,left,right,similarity,decision,lexical_ratio
+Company,HPE,Hewlett Packard Enterprise,1.0,MERGE_MANUAL,
+Company,Dell,Dell Technologies,1.0,MERGE_MANUAL,
+Company,Meta Platforms Inc,Meta,1.0,MERGE_MANUAL,
+Company,L&T Technology Services Limited,L&T Technology Services,0.9257732629776001,MERGE_VECTOR,1.0
+Company,Synopsys,Synopsys Inc.,0.8323649764060974,REJECT_THRESHOLD,1.0
+Company,Amazon Web Services,Amazon Web Services (AWS),0.9287390112876892,MERGE_VECTOR,0.905
+Company,Amazon Web Services,Amazon Web Services Inc.,0.823627769947052,REJECT_THRESHOLD,1.0
+Company,Synergy Quantum,Synergy Quantum India,0.8674540519714355,REJECT_THRESHOLD,0.833
+Company,Cumulus Technology Services Inc,Cumulus Technology Services Inc.,0.9943723678588867,MERGE_VECTOR,1.0
+Company,Broadridge Financial Solutions,Broadridge,0.754730761051178,REJECT_THRESHOLD,0.5
+Technology,cloud computing,cloud services,0.8303914070129395,REJECT_THRESHOLD,0.483
+Technology,Llama 2,Code Llama,0.7835339307785034,REJECT_THRESHOLD,0.588
+Technology,ChatGPT,OpenAI's ChatGPT,0.7734957933425903,REJECT_THRESHOLD,0.609
+Technology,Climate Innovation Fund,Climate Pledge Fund,0.7520827054977417,REJECT_THRESHOLD,0.619
+Technology,generative AI,Generative AI Solutions,0.8666329383850098,REJECT_THRESHOLD,0.722
+Technology,generative AI,Generative AI Capabilities,0.8564842939376831,REJECT_THRESHOLD,0.667
+Technology,generative AI,Generative AI offerings,0.7665746212005615,REJECT_THRESHOLD,0.722
+Technology,Generative AI offerings,Generative AI Capabilities,0.7597881555557251,REJECT_THRESHOLD,0.653
+Technology,Generative AI offerings,Generative AI Solutions,0.7514406442642212,REJECT_THRESHOLD,0.783
+Technology,generative AI solutions for manufacturing,Generative AI Solutions,0.7810755968093872,REJECT_THRESHOLD,0.719
+Technology,Generative AI Solutions,Generative AI Capabilities,0.7730093002319336,REJECT_THRESHOLD,0.735
+Technology,Now Assist Generative AI Capabilities,Generative AI Capabilities,0.7963720560073853,REJECT_THRESHOLD,0.825
+Technology,SAP CRM Sales,SAP CRM Service Manager,0.7730339765548706,REJECT_THRESHOLD,0.611

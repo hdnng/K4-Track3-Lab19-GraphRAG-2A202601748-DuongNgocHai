@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GraphRAG Lab Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#eef0f3; --surface:#ffffff; --surface-2:#f6f7f9; --line:#d9dde3;
+  --ink:#171a1f; --ink-2:#4d5665; --ink-3:#78818f;
+  --graph:#0b7a75; --graph-soft:#d7ecea; --flat:#b25139; --flat-soft:#f6e2dc;
+  --good:#1c7a4b; --warn:#996b0c; --crit:#a92e21;
+  --company:#0b7a75; --person:#7048a8; --tech:#b26a12;
+  --shadow:0 1px 2px rgba(20,24,31,.06),0 8px 24px -16px rgba(20,24,31,.35);
+  --r:10px;
+  --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#101318; --surface:#171b21; --surface-2:#1d222a; --line:#2b323c;
+    --ink:#e6e9ee; --ink-2:#aab3c0; --ink-3:#7e8899;
+    --graph:#3ac6b6; --graph-soft:#123a38; --flat:#e2825f; --flat-soft:#3b2119;
+    --good:#4cbd82; --warn:#d6a52f; --crit:#e2705f;
+    --company:#3ac6b6; --person:#a98cf0; --tech:#e0a24a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#101318; --surface:#171b21; --surface-2:#1d222a; --line:#2b323c;
+  --ink:#e6e9ee; --ink-2:#aab3c0; --ink-3:#7e8899;
+  --graph:#3ac6b6; --graph-soft:#123a38; --flat:#e2825f; --flat-soft:#3b2119;
+  --good:#4cbd82; --warn:#d6a52f; --crit:#e2705f;
+  --company:#3ac6b6; --person:#a98cf0; --tech:#e0a24a;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.9);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+     font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+a{color:var(--graph)}
+button{font:inherit}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- shell ---------- */
+header.top{position:sticky;top:0;z-index:20;background:var(--surface);
+  border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+.top-inner{max-width:1320px;margin:0 auto;padding:14px 20px;display:flex;
+  gap:18px;align-items:center;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;gap:2px;margin-right:auto}
+.brand h1{font-size:19px;font-weight:800}
+.brand span{font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12px;
+  color:var(--ink-2);background:var(--surface-2);font-family:var(--mono)}
+.chip b{color:var(--ink);font-weight:600}
+.chip.ok{border-color:var(--good);color:var(--good)}
+.tabs{max-width:1320px;margin:0 auto;padding:0 20px;display:flex;gap:2px;overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:11px 14px;
+  color:var(--ink-2);cursor:pointer;white-space:nowrap;font-weight:500}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--graph)}
+.tab:focus-visible{outline:2px solid var(--graph);outline-offset:-2px}
+main{max-width:1320px;margin:0 auto;padding:22px 20px 60px}
+.panel{display:none}
+.panel.active{display:block}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow)}
+.card-h{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;
+  align-items:baseline;gap:10px;flex-wrap:wrap}
+.card-h h3{font-size:14px;text-transform:uppercase;letter-spacing:.07em}
+.card-h .sub{font-size:12px;color:var(--ink-3)}
+.card-b{padding:16px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.split{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+@media (max-width:920px){.grid-2,.split{grid-template-columns:1fr}}
+
+/* ---------- question list ---------- */
+.qfilter{display:flex;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.qfilter button{border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);
+  border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer}
+.qfilter button[aria-pressed="true"]{background:var(--graph);border-color:var(--graph);color:#fff}
+.qlist{max-height:640px;overflow:auto}
+.qitem{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);
+  background:none;color:inherit;padding:11px 14px;cursor:pointer}
+.qitem:hover{background:var(--surface-2)}
+.qitem[aria-current="true"]{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--graph)}
+.qitem .qid{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.qitem .qtx{font-size:13px;line-height:1.4;margin-top:3px}
+.tagx{font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:1px 6px;
+  border-radius:4px;border:1px solid var(--line);color:var(--ink-2)}
+
+/* ---------- answers ---------- */
+.answer-h{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.dot{width:9px;height:9px;border-radius:50%}
+.flat .dot{background:var(--flat)} .graph .dot{background:var(--graph)}
+.answer-h h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em}
+.answer{white-space:pre-wrap;font-size:14px;line-height:1.6}
+.answer code, .cid{font-family:var(--mono);font-size:12px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.scores{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0 0}
+.score{flex:1 1 90px}
+.score .lab{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)}
+.score .val{font-family:var(--mono);font-size:19px;font-weight:600}
+.bar{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%}
+.flat .bar i{background:var(--flat)} .graph .bar i{background:var(--graph)}
+details.trace{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+details.trace summary{cursor:pointer;font-size:12px;color:var(--ink-2);
+  text-transform:uppercase;letter-spacing:.06em}
+.tracebox{max-height:280px;overflow:auto;margin-top:8px;font-family:var(--mono);font-size:11.5px;
+  line-height:1.5;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px}
+.tracebox .hit{background:var(--graph-soft);border-radius:3px}
+.rationale{font-size:12.5px;color:var(--ink-2);border-left:2px solid var(--line);
+  padding-left:10px;margin-top:10px}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);
+  position:sticky;top:0;background:var(--surface)}
+td.num{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+tr.win-graph td.num.g{color:var(--graph);font-weight:600}
+tr.win-flat td.num.f{color:var(--flat);font-weight:600}
+.pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:999px;
+  border:1px solid var(--line)}
+.pill.merge{color:var(--good);border-color:var(--good)}
+.pill.reject{color:var(--crit);border-color:var(--crit)}
+.pill.manual{color:var(--warn);border-color:var(--warn)}
+
+/* ---------- graph canvas ---------- */
+.canvas-wrap{position:relative;background:var(--surface-2);border-radius:8px;
+  border:1px solid var(--line);overflow:hidden}
+canvas{display:block;width:100%;height:520px;cursor:grab}
+.legend{position:absolute;left:10px;bottom:10px;display:flex;gap:12px;font-size:11px;
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.legend i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+.nodeinfo{font-family:var(--mono);font-size:12px;max-height:520px;overflow:auto}
+.nodeinfo .edge{padding:6px 0;border-bottom:1px solid var(--line)}
+.muted{color:var(--ink-3)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
+.kv dt{color:var(--ink-3)} .kv dd{margin:0;font-family:var(--mono)}
+
+/* ---------- live ---------- */
+.ask{display:flex;gap:10px;flex-wrap:wrap}
+.ask input{flex:1 1 420px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--surface-2);color:var(--ink);font:inherit}
+.ask button{padding:10px 18px;border-radius:8px;border:1px solid var(--graph);
+  background:var(--graph);color:#fff;font-weight:600;cursor:pointer}
+.ask button[disabled]{opacity:.5;cursor:not-allowed}
+.note{font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);
+  border-left:3px solid var(--warn);border-radius:6px;padding:9px 12px;margin-top:12px}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid currentColor;
+  border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+.stack{display:flex;flex-direction:column;gap:16px}
+.flow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.step{flex:1 1 150px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.step .n{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.step .t{font-weight:600;font-size:13px;margin:2px 0 4px}
+.step .d{font-size:12px;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <h1>GraphRAG Lab Console</h1>
+      <span id="meta-line">đang nạp outputs/demo_data.json…</span>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <nav class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" aria-selected="true" data-panel="p-compare">So sánh 25 câu hỏi</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="p-graph">Knowledge Graph</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="p-er">Entity Resolution</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="p-fail">Failure modes &amp; Bonus</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="p-live">Hỏi trực tiếp</button>
+  </nav>
+</header>
+
+<main>
+  <section id="p-compare" class="panel active">
+    <div class="split">
+      <div class="card">
+        <div class="qfilter" id="qfilter">
+          <button data-g="all" aria-pressed="true">Tất cả</button>
+          <button data-g="factoid" aria-pressed="false">factoid</button>
+          <button data-g="multi-hop" aria-pressed="false">multi-hop</button>
+          <button data-g="cross-doc" aria-pressed="false">cross-doc</button>
+        </div>
+        <div class="qlist" id="qlist"></div>
+      </div>
+      <div class="stack" id="qdetail"></div>
+    </div>
+  </section>
+
+  <section id="p-graph" class="panel">
+    <div class="split" style="grid-template-columns:1fr 340px">
+      <div class="card">
+        <div class="card-h">
+          <h3>Subgraph tri thức</h3>
+          <span class="sub">kéo để xoay · lăn chuột để zoom · bấm vào node để xem cạnh</span>
+        </div>
+        <div class="card-b">
+          <div class="canvas-wrap">
+            <canvas id="gcanvas"></canvas>
+            <div class="legend">
+              <span><i style="background:var(--company)"></i>Company</span>
+              <span><i style="background:var(--person)"></i>Person</span>
+              <span><i style="background:var(--tech)"></i>Technology</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <div class="card-h"><h3>Node đang chọn</h3></div>
+          <div class="card-b nodeinfo" id="nodeinfo"><span class="muted">Chưa chọn node nào.</span></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Top degree</h3><span class="sub">ứng viên super-node</span></div>
+          <div class="card-b tw" id="topdeg"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="p-er" class="panel">
+    <div class="stack">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-h"><h3>Độ nhạy ngưỡng cosine</h3><span class="sub">vì sao chọn 0.90</span></div>
+          <div class="card-b tw" id="sweep"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Lexical Guard chặn gì</h3><span class="sub">similarity cao nhưng từ chối gộp</span></div>
+          <div class="card-b tw" id="rejects"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Audit toàn bộ</h3><span class="sub" id="audit-count"></span></div>
+        <div class="card-b tw" style="max-height:520px;overflow:auto" id="audit"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="p-fail" class="panel">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>Bảng benchmark tổng hợp</h3><span class="sub">Flat RAG vs Hybrid GraphRAG</span></div>
+        <div class="card-b tw" id="comparison"></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-h"><h3>Super-node mitigation</h3></div>
+          <div class="card-b" id="supernode"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Dedup: exact vs near (MinHash/LSH)</h3></div>
+          <div class="card-b tw" id="dedup"></div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-h"><h3>Self-correction hop2 → hop3 → vector</h3></div>
+          <div class="card-b tw" id="selfcorr"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Community reports (Global Search)</h3></div>
+          <div class="card-b tw" id="community"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="p-live" class="panel">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>Chạy pipeline thật</h3><span class="sub" id="live-status">đang kiểm tra…</span></div>
+        <div class="card-b">
+          <div class="ask">
+            <input id="q" placeholder="VD: Which company did HPE agree to acquire to expand edge-to-cloud security?">
+            <button id="askbtn">Hỏi cả hai hệ thống</button>
+          </div>
+          <div class="note">Mỗi lần hỏi gọi Neo4j + Groq thật: seed extraction → BFS 2 hop → sinh câu trả lời cho cả Flat RAG và Hybrid GraphRAG. Mất khoảng 10–30 giây.</div>
+        </div>
+      </div>
+      <div id="liveout"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const el = (t, cls, html) => { const n = document.createElement(t); if(cls) n.className = cls;
+  if(html !== undefined) n.innerHTML = html; return n; };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = (v, d=2) => (v === null || v === undefined || v === "" || Number.isNaN(+v)) ? "—" : (+v).toFixed(d);
+
+let DATA = null, CUR = null, FILTER = "all";
+
+/* ---------------- tabs ---------------- */
+$("#tabs").addEventListener("click", e => {
+  const b = e.target.closest(".tab"); if(!b) return;
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t === b)));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === b.dataset.panel));
+  if(b.dataset.panel === "p-graph") startGraph();
+});
+
+/* ---------------- load ---------------- */
+fetch("demo_data.json").then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
+  DATA = d; renderHeader(); renderQuestions(); renderER(); renderFailures();
+}).catch(err => {
+  $("#meta-line").textContent = "Không đọc được demo_data.json (" + err + ") — chạy cell 6.1 của notebook trước.";
+});
+
+function renderHeader(){
+  const p = DATA.pipeline, m = DATA.meta;
+  $("#meta-line").textContent = m.dataset + " · trích xuất " + m.extraction_model + " · judge " + m.judge_model;
+  const chips = [
+    ["Chunk", p.chunks], ["Chunk trích xuất", p.extraction_chunks],
+    ["Node", p.nodes], ["Edge", p.edges_in_graph], ["Triple", p.triples_after_er]
+  ].map(([k, v]) => `<span class="chip">${k} <b>${v}</b></span>`).join("");
+  $("#chips").innerHTML = chips +
+    `<span class="chip ok">Edge thiếu provenance <b>${DATA.pipeline.invalid_provenance_edges}</b></span>`;
+}
+
+/* ---------------- tab 1: comparison ---------------- */
+function renderQuestions(){
+  const list = $("#qlist"); list.innerHTML = "";
+  DATA.eval_results.filter(r => FILTER === "all" || r.group === FILTER).forEach(r => {
+    const b = el("button", "qitem");
+    b.dataset.id = r.id;
+    b.innerHTML = `<span class="qid">${r.id}</span> <span class="tagx">${r.group}</span>
+                   <div class="qtx">${esc(r.question)}</div>`;
+    b.addEventListener("click", () => selectQuestion(r.id));
+    list.append(b);
+  });
+  const first = DATA.eval_results.find(r => FILTER === "all" || r.group === FILTER);
+  if(first) selectQuestion(first.id);
+}
+$("#qfilter").addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return;
+  FILTER = b.dataset.g;
+  document.querySelectorAll("#qfilter button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  renderQuestions();
+});
+
+function scoreBlock(side, j){
+  const rows = [["Comprehensive", j.comprehensiveness], ["Faithful", j.faithfulness], ["Multi-hop", j.multi_hop_reasoning]];
+  return `<div class="scores">` + rows.map(([lab, v]) =>
+    `<div class="score"><div class="lab">${lab}</div><div class="val">${v}<span class="muted" style="font-size:12px">/5</span></div>
+     <div class="bar"><i style="width:${(v/5*100).toFixed(0)}%"></i></div></div>`).join("") + `</div>`;
+}
+
+function highlightGold(text, gold){
+  let out = esc(text);
+  (gold || []).forEach(g => { out = out.split(esc(g)).join(`<span class="hit">${esc(g)}</span>`); });
+  return out;
+}
+
+function selectQuestion(id){
+  CUR = id;
+  document.querySelectorAll(".qitem").forEach(x => x.setAttribute("aria-current", String(x.dataset.id === id)));
+  const r = DATA.eval_results.find(x => x.id === id);
+  const t = (DATA.traces || {})[id] || {};
+  const gold = t.gold_evidence_chunks || [];
+  const box = $("#qdetail"); box.innerHTML = "";
+
+  const head = el("div", "card");
+  head.innerHTML = `<div class="card-h"><h3>${r.id} · ${r.group}</h3>
+      <span class="sub">Evidence recall — Flat ${(r.flat_evidence_recall*100).toFixed(0)}% ·
+      Graph+Vector ${(r.graph_evidence_recall*100).toFixed(0)}%</span></div>
+    <div class="card-b">
+      <p style="margin:0 0 10px;font-size:15px"><b>${esc(r.question)}</b></p>
+      <p style="margin:0;font-size:13.5px;color:var(--ink-2)"><b>Đáp án chuẩn:</b> ${esc(r.reference_answer)}</p>
+      <p style="margin:8px 0 0;font-size:12px" class="muted">Chunk bằng chứng vàng:
+        ${gold.map(g => `<span class="cid">${esc(g)}</span>`).join(" ") || "—"}</p>
+    </div>`;
+  box.append(head);
+
+  const cmp = el("div", "grid-2");
+
+  const flat = el("div", "card flat");
+  flat.innerHTML = `<div class="card-b">
+      <div class="answer-h"><span class="dot"></span><h3>Flat RAG · vector top-6</h3></div>
+      <div class="answer">${esc(r.flat_answer)}</div>
+      ${scoreBlock("flat", t.judge_flat || {comprehensiveness:r.flat_comprehensiveness,
+          faithfulness:r.flat_faithfulness, multi_hop_reasoning:r.flat_multi_hop_reasoning})}
+      <div class="rationale">${esc(r.flat_judge_rationale)}</div>
+      <details class="trace"><summary>Chunk đã lấy về (${(t.flat_chunks||[]).length})</summary>
+        <div class="tracebox">${(t.flat_chunks||[]).map(c =>
+          `<div>${gold.includes(c.chunk_id) ? '<span class="hit">' + esc(c.chunk_id) + '</span>' : esc(c.chunk_id)}
+           · score ${c.score} · ${esc(c.date)}<br><span class="muted">${esc((c.text||"").slice(0,220))}…</span></div>`).join("<br>")}</div>
+      </details>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">latency ${num(r.flat_latency_s)}s · ${r.flat_total_tokens} token</p>
+    </div>`;
+
+  const graph = el("div", "card graph");
+  graph.innerHTML = `<div class="card-b">
+      <div class="answer-h"><span class="dot"></span><h3>Hybrid GraphRAG · BFS 2 hop + vector</h3></div>
+      <div class="answer">${esc(r.graph_answer)}</div>
+      ${scoreBlock("graph", t.judge_graph || {comprehensiveness:r.graph_comprehensiveness,
+          faithfulness:r.graph_faithfulness, multi_hop_reasoning:r.graph_multi_hop_reasoning})}
+      <div class="rationale">${esc(r.graph_judge_rationale)}</div>
+      <details class="trace"><summary>Subgraph tuyến tính hoá (${(t.graph_lines||[]).length} cạnh)</summary>
+        <div class="tracebox">${(t.graph_lines||[]).map(l => highlightGold(l, gold)).join("<br>") || "(rỗng)"}</div>
+      </details>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">seed: ${esc(r.graph_matched_seeds || "—")} ·
+        ${r.graph_collected_edges} cạnh · latency ${num(r.graph_latency_s)}s · ${r.graph_total_tokens} token</p>
+    </div>`;
+
+  cmp.append(flat, graph); box.append(cmp);
+}
+
+/* ---------------- tab 2: graph ---------------- */
+let sim = null;
+function startGraph(){
+  if(sim || !DATA) return;
+  const canvas = $("#gcanvas"), ctx = canvas.getContext("2d");
+  const nodes = DATA.graph.nodes.slice(0, 220);
+  const ids = new Set(nodes.map(n => n.id));
+  const edges = DATA.graph.edges.filter(e => ids.has(e.source) && ids.has(e.target));
+  const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const colorOf = t => t === "Person" ? cssv("--person") : t === "Technology" ? cssv("--tech") : cssv("--company");
+  function cssv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  let W = 0, H = 0, scale = 1, ox = 0, oy = 0, dragging = null, panning = false, last = null, sel = null;
+  nodes.forEach((n, i) => { const a = i * 2.399963; const rr = 12 * Math.sqrt(i);
+    n.x = Math.cos(a) * rr; n.y = Math.sin(a) * rr; n.vx = 0; n.vy = 0; });
+
+  function resize(){ const r = canvas.getBoundingClientRect(); W = canvas.width = r.width * devicePixelRatio;
+    H = canvas.height = r.height * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+  resize(); window.addEventListener("resize", resize);
+
+  function step(){
+    for(let i=0;i<nodes.length;i++){
+      const a = nodes[i];
+      for(let j=i+1;j<nodes.length;j++){
+        const b = nodes[j]; let dx = b.x-a.x, dy = b.y-a.y; let d2 = dx*dx+dy*dy+.01;
+        if(d2 > 90000) continue;
+        const f = 320/d2; const d = Math.sqrt(d2);
+        const fx = f*dx/d, fy = f*dy/d;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+    }
+    edges.forEach(e => { const a = byId[e.source], b = byId[e.target];
+      const dx = b.x-a.x, dy = b.y-a.y, d = Math.hypot(dx,dy)+.01;
+      const f = (d-70)*.006; a.vx += f*dx/d; a.vy += f*dy/d; b.vx -= f*dx/d; b.vy -= f*dy/d; });
+    nodes.forEach(n => { n.vx -= n.x*.0015; n.vy -= n.y*.0015;
+      n.vx *= .86; n.vy *= .86; if(n !== dragging){ n.x += n.vx; n.y += n.vy; } });
+  }
+
+  function draw(){
+    const cw = W/devicePixelRatio, ch = H/devicePixelRatio;
+    ctx.clearRect(0,0,cw,ch);
+    ctx.save(); ctx.translate(cw/2+ox, ch/2+oy); ctx.scale(scale, scale);
+    ctx.lineWidth = .7; ctx.strokeStyle = cssv("--line");
+    edges.forEach(e => { const a = byId[e.source], b = byId[e.target];
+      const on = sel && (e.source === sel.id || e.target === sel.id);
+      ctx.strokeStyle = on ? cssv("--graph") : cssv("--line");
+      ctx.globalAlpha = on ? .95 : .4;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); });
+    ctx.globalAlpha = 1;
+    nodes.forEach(n => { const r = 3 + Math.min(11, Math.sqrt(n.degree)*1.7);
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 6.283);
+      ctx.fillStyle = colorOf(n.type); ctx.globalAlpha = sel && sel !== n ? .55 : 1; ctx.fill();
+      if(sel === n){ ctx.lineWidth = 2; ctx.strokeStyle = cssv("--ink"); ctx.stroke(); }
+      if(n.degree >= 6 || sel === n){
+        ctx.globalAlpha = 1; ctx.fillStyle = cssv("--ink");
+        ctx.font = "500 10px IBM Plex Mono, monospace";
+        ctx.fillText(n.name.slice(0,22), n.x + r + 3, n.y + 3);
+      }});
+    ctx.restore();
+    step();
+    sim = requestAnimationFrame(draw);
+  }
+  draw();
+
+  function pick(ev){
+    const r = canvas.getBoundingClientRect();
+    const x = (ev.clientX - r.left - r.width/2 - ox)/scale, y = (ev.clientY - r.top - r.height/2 - oy)/scale;
+    let best = null, bd = 400;
+    nodes.forEach(n => { const d = (n.x-x)**2 + (n.y-y)**2; if(d < bd){ bd = d; best = n; } });
+    return best;
+  }
+  canvas.addEventListener("mousedown", ev => { const n = pick(ev); last = {x:ev.clientX,y:ev.clientY};
+    if(n){ dragging = n; showNode(n); } else panning = true; });
+  window.addEventListener("mousemove", ev => {
+    if(!last) return;
+    const dx = ev.clientX - last.x, dy = ev.clientY - last.y;
+    if(dragging){ dragging.x += dx/scale; dragging.y += dy/scale; }
+    else if(panning){ ox += dx; oy += dy; }
+    last = {x:ev.clientX, y:ev.clientY};
+  });
+  window.addEventListener("mouseup", () => { dragging = null; panning = false; last = null; });
+  canvas.addEventListener("wheel", ev => { ev.preventDefault();
+    scale = Math.min(3, Math.max(.3, scale * (ev.deltaY < 0 ? 1.12 : .89))); }, {passive:false});
+
+  function showNode(n){
+    sel = n;
+    const rel = DATA.graph.edges.filter(e => e.source === n.id || e.target === n.id).slice(0, 40);
+    $("#nodeinfo").innerHTML = `<div style="font-size:14px;font-weight:600">${esc(n.name)}</div>
+      <div class="muted" style="margin-bottom:8px">${n.type} · degree ${n.degree}
+      ${n.community_id >= 0 ? "· community " + n.community_id : ""}</div>` +
+      rel.map(e => `<div class="edge">${esc(e.source_name)} <b style="color:var(--graph)">${e.relation}</b> ${esc(e.target_name)}
+        <div class="muted">${esc(e.date)} · ${esc(e.chunk)}</div></div>`).join("");
+  }
+
+  const td = DATA.top_degree.map(r => `<tr><td>${esc(r.name)}</td><td>${r.type}</td>
+    <td class="num">${r.degree}</td></tr>`).join("");
+  $("#topdeg").innerHTML = `<table><thead><tr><th>Entity</th><th>Type</th><th>Degree</th></tr></thead><tbody>${td}</tbody></table>`;
+}
+
+/* ---------------- tab 3: entity resolution ---------------- */
+function renderER(){
+  const sw = DATA.threshold_sweep.map(r => `<tr${r.threshold === 0.9 ? ' style="font-weight:600"' : ''}>
+      <td class="num">${num(r.threshold)}</td><td class="num">${r.MERGE_VECTOR ?? 0}</td>
+      <td class="num">${r.REJECT_GUARD ?? 0}</td><td class="num">${r.so_entity_canonical}</td></tr>`).join("");
+  $("#sweep").innerHTML = `<table><thead><tr><th>Ngưỡng</th><th>Merge</th><th>Guard chặn</th>
+    <th>Entity canonical</th></tr></thead><tbody>${sw}</tbody></table>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Ngưỡng thấp gộp nhiều hơn nhưng tăng nguy cơ false merge;
+    dòng in đậm là ngưỡng đang dùng.</p>`;
+
+  const rj = DATA.entity_audit.filter(r => r.decision === "REJECT_GUARD").slice(0, 12);
+  $("#rejects").innerHTML = rj.length ? `<table><thead><tr><th>Trái</th><th>Phải</th><th>Cosine</th></tr></thead>
+    <tbody>${rj.map(r => `<tr><td>${esc(r.left)}</td><td>${esc(r.right)}</td>
+      <td class="num">${num(r.similarity, 3)}</td></tr>`).join("")}</tbody></table>`
+    : `<span class="muted">Không có cặp nào bị guard chặn ở ngưỡng hiện tại.</span>`;
+
+  $("#audit-count").textContent = DATA.entity_audit.length + " dòng";
+  $("#audit").innerHTML = `<table><thead><tr><th>Type</th><th>Trái</th><th>Phải</th><th>Cosine</th><th>Quyết định</th></tr></thead>
+    <tbody>${DATA.entity_audit.map(r => `<tr><td>${r.type}</td><td>${esc(r.left)}</td><td>${esc(r.right)}</td>
+      <td class="num">${num(r.similarity, 3)}</td>
+      <td><span class="pill ${r.decision === "REJECT_GUARD" ? "reject" : r.decision === "MERGE_MANUAL" ? "manual" : "merge"}">${r.decision}</span></td></tr>`).join("")}</tbody></table>`;
+}
+
+/* ---------------- tab 4: failure modes ---------------- */
+function renderFailures(){
+  const rows = DATA.comparison.map(r => {
+    const f = r["Flat RAG"], g = r["GraphRAG"], metric = r.Metric;
+    const lower = metric === "Latency (s)" || metric === "Token usage";
+    const cls = (g > f) === !lower ? "win-graph" : (f === g ? "" : "win-flat");
+    return `<tr class="${cls}"><td>${r["Loai cau hoi"]}</td><td>${metric}</td>
+      <td class="num f">${num(f, 3)}</td><td class="num g">${num(g, 3)}</td>
+      <td class="num">${num(r.Delta, 3)}</td><td class="muted">${esc(r["Nhan xet phan tich"])}</td></tr>`;
+  }).join("");
+  $("#comparison").innerHTML = `<table><thead><tr><th>Nhóm</th><th>Metric</th><th>Flat RAG</th>
+    <th>GraphRAG</th><th>Δ</th><th>Nhận xét</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  const sn = DATA.supernode_demo || {};
+  $("#supernode").innerHTML = `<dl class="kv">
+    <dt>Node bậc cao nhất</dt><dd>${esc(sn.top_name || "—")}</dd>
+    <dt>Degree thật</dt><dd>${sn.real_degree ?? "—"}</dd>
+    <dt>Ngưỡng production</dt><dd>${sn.production_threshold ?? 100}</dd>
+    <dt>Cap mỗi node</dt><dd>${sn.edge_cap ?? 50} cạnh mới nhất</dd>
+    <dt>Chế độ kiểm chứng</dt><dd>${esc(sn.mode || "—")}</dd>
+    <dt>Sự kiện cắt tỉa</dt><dd>${(sn.events || []).map(e => e.degree + "→" + e.limit).join(", ") || "—"}</dd>
+    <dt>Trần toàn cục</dt><dd>${sn.global_cap_check ? sn.global_cap_check.edges + "/" + sn.global_cap_check.cap + " cạnh · " + sn.global_cap_check.context_chars + " ký tự" : "—"}</dd>
+  </dl>`;
+
+  $("#dedup").innerHTML = `<table><thead><tr><th>Bước</th><th>Số bản ghi</th></tr></thead><tbody>` +
+    DATA.dedup_summary.map(r => `<tr><td>${esc(r.buoc)}</td><td class="num">${r.so_ban_ghi}</td></tr>`).join("") +
+    `</tbody></table>` + (DATA.near_dup_pairs.length ? `<p class="muted" style="font-size:12px;margin-top:10px">
+    Ví dụ cặp gần trùng: ${esc(DATA.near_dup_pairs[0].title_i)} ↔ ${esc(DATA.near_dup_pairs[0].title_j)}
+    (Jaccard ${num(DATA.near_dup_pairs[0].jaccard_est, 2)})</p>` : "");
+
+  $("#selfcorr").innerHTML = DATA.self_correction.length ? `<table><thead><tr><th>Câu</th><th>Route</th>
+    <th>Cạnh trước</th><th>Cạnh sau</th><th>Judge trước</th><th>Judge sau</th></tr></thead><tbody>` +
+    DATA.self_correction.map(r => `<tr><td>${r.id}</td><td>${r.route}</td>
+      <td class="num">${r["edges_truoc(hop2)"]}</td><td class="num">${r.edges_sau}</td>
+      <td class="num">${r.judge_truoc}</td><td class="num g">${r.judge_sau}</td></tr>`).join("") + `</tbody></table>`
+    : `<span class="muted">Chưa có dữ liệu.</span>`;
+
+  $("#community").innerHTML = DATA.community_reports.length ? `<table><thead><tr><th>#</th><th>Chủ đề</th>
+    <th>Entity chính</th><th>Cạnh</th></tr></thead><tbody>` +
+    DATA.community_reports.map(r => `<tr><td class="num">${r.community_id}</td><td>${esc(r.title)}
+      <div class="muted" style="font-size:12px">${esc(r.summary)}</div></td>
+      <td style="font-size:12px">${esc(r.key_entities)}</td><td class="num">${r.n_edges}</td></tr>`).join("") + `</tbody></table>`
+    : `<span class="muted">Chưa có dữ liệu.</span>`;
+}
+
+/* ---------------- tab 5: live ---------------- */
+fetch("api/health").then(r => r.json()).then(h => {
+  $("#live-status").textContent = h.live
+    ? `sẵn sàng · ${h.nodes} node · ${h.edges} edge · ${h.model}`
+    : "không kết nối được pipeline: " + (h.reason || "");
+  $("#askbtn").disabled = !h.live;
+}).catch(() => {
+  $("#live-status").textContent = "chỉ chạy khi mở qua demo/serve_demo.py";
+  $("#askbtn").disabled = true;
+});
+
+$("#askbtn").addEventListener("click", async () => {
+  const q = $("#q").value.trim(); if(!q) return;
+  const btn = $("#askbtn"); btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> đang chạy…';
+  $("#liveout").innerHTML = "";
+  try{
+    const res = await fetch("api/ask", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({question:q})});
+    const d = await res.json();
+    if(d.error) throw new Error(d.error);
+    const wrap = el("div", "grid-2");
+    wrap.innerHTML = `
+      <div class="card flat"><div class="card-b">
+        <div class="answer-h"><span class="dot"></span><h3>Flat RAG</h3></div>
+        <div class="answer">${esc(d.flat.answer)}</div>
+        <details class="trace"><summary>${d.flat.chunks.length} chunk</summary>
+          <div class="tracebox">${d.flat.chunks.map(c => `${esc(c.chunk_id)} · ${c.score}<br>
+            <span class="muted">${esc((c.text||"").slice(0,200))}…</span>`).join("<br><br>")}</div></details>
+        <p class="muted" style="font-size:12px;margin-top:10px">${d.flat.latency_s}s · ${d.flat.total_tokens} token</p>
+      </div></div>
+      <div class="card graph"><div class="card-b">
+        <div class="answer-h"><span class="dot"></span><h3>Hybrid GraphRAG</h3></div>
+        <div class="answer">${esc(d.graph.answer)}</div>
+        <details class="trace" open><summary>${d.graph.lines.length} cạnh subgraph</summary>
+          <div class="tracebox">${d.graph.lines.map(esc).join("<br>") || "(không match seed nào)"}</div></details>
+        <p class="muted" style="font-size:12px;margin-top:10px">seed:
+          ${(d.graph.diagnostics.matched_seeds||[]).map(s => esc(s.name)).join(", ") || "—"} ·
+          ${d.graph.diagnostics.collected_edges} cạnh · ${d.graph.latency_s}s · ${d.graph.total_tokens} token</p>
+      </div></div>`;
+    $("#liveout").append(wrap);
+  }catch(e){
+    $("#liveout").innerHTML = `<div class="card"><div class="card-b"><b>Lỗi:</b>
+      <pre class="mono" style="white-space:pre-wrap;font-size:12px">${esc(e.message)}</pre></div></div>`;
+  }finally{
+    btn.disabled = false; btn.textContent = "Hỏi cả hai hệ thống";
+  }
+});
+$("#q").addEventListener("keydown", e => { if(e.key === "Enter") $("#askbtn").click(); });
+</script>
+</body>
+</html>

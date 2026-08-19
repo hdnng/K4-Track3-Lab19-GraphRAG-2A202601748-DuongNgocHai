@@ -1,0 +1,10 @@
+id,group,route,edges_truoc(hop2),edges_sau,missing_detected,judge_truoc,judge_sau,answer_sau,delta_judge
+G5000-33,cross-doc,hop2,8,8,,5,5,"The July OpenAI-related event that is a content/technology collaboration is the partnership with the Associated Press, where they agreed to share select news content and technology on July 13, 2023 [chunk_id=row00366::c0000]. The event that represents a voluntary governance commitment is not specifi",0
+G5000-30,multi-hop,hop2,3,3,,6,3,"Meta appears in two different AI contexts:
+
+1. **Partnership Context**: Meta is partnered with Pelocal Fintech Pvt. Ltd. for a WhatsApp ticketing service across Delhi NCR metro lines. The relation to store in this case is **PARTNERED_WITH**.
+
+2. **Development Context**: Meta developed the Meta Verif",-3
+G5000-50,multi-hop,hop3+vector,11,11,"The context does not provide specific information about the AI positioning of NVIDIA, AMD, and Intel, nor does it report",8,10,"In the context of chip-related AI positioning:
+
+1. **NVIDIA**: NVIDIA is strongly positioned in the AI sector, particularly with its chips being utilized to power artificial intelligence services, such as chatbots. The company has seen a significant increase in demand for its AI-related products, as",2

@@ -1,0 +1,5 @@
+buoc,so_ban_ghi
+Raw 5.000 dong dau,5000
+Sau loc snippet >=120 ky tu,2687
+Sau exact dedup (SHA-1),2114
+Sau near-dedup (MinHash/LSH),2090

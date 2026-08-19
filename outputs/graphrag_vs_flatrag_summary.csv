@@ -1,0 +1,25 @@
+Loai cau hoi,Metric,Flat RAG,GraphRAG,Delta,Nhan xet phan tich
+cross-doc,Comprehensiveness,3.636,4.364,0.727,Hai phuong phap gan nhau.
+cross-doc,Faithfulness,3.364,4.182,0.818,GraphRAG cai thien ro; kiem tra rationale va provenance.
+cross-doc,Multi-hop reasoning,2.636,3.909,1.273,GraphRAG cai thien ro; kiem tra rationale va provenance.
+cross-doc,Evidence recall,0.727,0.955,0.227,Hybrid lay ve 95% chunk bang chung vang vs Flat 73%.
+cross-doc,Latency (s),2.262,2.105,-0.157,GraphRAG khong dat hon trong sample nay.
+cross-doc,Token usage,681.182,1063.455,382.273,GraphRAG dat hon 1.56x — gia phai tra cho graph context.
+factoid,Comprehensiveness,5.0,5.0,0.0,Hai phuong phap gan nhau.
+factoid,Faithfulness,5.0,5.0,0.0,Hai phuong phap gan nhau.
+factoid,Multi-hop reasoning,5.0,5.0,0.0,Hai phuong phap gan nhau.
+factoid,Evidence recall,1.0,1.0,0.0,Hybrid lay ve 100% chunk bang chung vang vs Flat 100%.
+factoid,Latency (s),1.246,1.86,0.614,GraphRAG dat hon 1.49x — gia phai tra cho graph context.
+factoid,Token usage,718.5,931.0,212.5,GraphRAG dat hon 1.30x — gia phai tra cho graph context.
+multi-hop,Comprehensiveness,3.833,4.25,0.417,Hai phuong phap gan nhau.
+multi-hop,Faithfulness,3.917,3.833,-0.083,Hai phuong phap gan nhau.
+multi-hop,Multi-hop reasoning,3.583,4.167,0.583,Hai phuong phap gan nhau.
+multi-hop,Evidence recall,0.771,0.861,0.09,Hybrid lay ve 86% chunk bang chung vang vs Flat 77%.
+multi-hop,Latency (s),2.33,2.266,-0.063,GraphRAG khong dat hon trong sample nay.
+multi-hop,Token usage,712.667,1127.167,414.5,GraphRAG dat hon 1.58x — gia phai tra cho graph context.
+TOAN BO,Comprehensiveness,3.84,4.36,0.52,Hai phuong phap gan nhau.
+TOAN BO,Faithfulness,3.76,4.08,0.32,Hai phuong phap gan nhau.
+TOAN BO,Multi-hop reasoning,3.28,4.12,0.84,GraphRAG cai thien ro; kiem tra rationale va provenance.
+TOAN BO,Evidence recall,0.77,0.913,0.143,Hybrid lay ve 91% chunk bang chung vang vs Flat 77%.
+TOAN BO,Latency (s),2.213,2.163,-0.051,GraphRAG khong dat hon trong sample nay.
+TOAN BO,Token usage,699.28,1083.44,384.16,GraphRAG dat hon 1.55x — gia phai tra cho graph context.

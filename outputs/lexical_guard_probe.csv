@@ -1,0 +1,11 @@
+left,right,cosine,lexical_ratio,guard_cho_gop,ket_qua
+Apple,Apple Watch,0.609,0.625,False,REJECT_THRESHOLD
+Apple,Apple Inc.,0.735,1.0,True,REJECT_THRESHOLD
+Sam Altman,Steve Altman,0.824,0.727,True,REJECT_THRESHOLD
+Google,Google Cloud,0.546,0.667,False,REJECT_THRESHOLD
+Meta,Meta Platforms Inc,0.511,0.444,False,REJECT_THRESHOLD
+Llama 2,Code Llama,0.784,0.588,False,REJECT_THRESHOLD
+Amazon,Amazon Web Services,0.647,0.48,False,REJECT_THRESHOLD
+Microsoft,Microsoft Azure,0.65,0.75,True,REJECT_THRESHOLD
+Dell,Dell Technologies,0.821,0.381,False,REJECT_THRESHOLD
+Synopsys,Synopsys Inc.,0.832,1.0,True,REJECT_THRESHOLD
