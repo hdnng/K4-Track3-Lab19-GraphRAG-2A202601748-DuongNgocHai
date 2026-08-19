@@ -28,3 +28,6 @@ golden_dataset.csv
 # OS files
 .DS_Store
 Thumbs.db
+
+
+!outputs/*.csv
