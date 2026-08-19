@@ -1,339 +1,339 @@
-# Huong dan chi tiet Lab: GraphRAG vs Flat RAG - Production-Grade Lab
+# Hướng dẫn chi tiết Lab: GraphRAG vs Flat RAG - Production-Grade Lab
 
-> Track 3 - Lab 19 | Thoi luong: 120 phut | Muc do: Trung cap
+> Track 3 - Lab 19 | Thời lượng: 120 phút | Mức độ: Trung cấp
 
-> Nguon: VLearn Codelabs (codelabs.vlearn.dev) - Tai lieu nay la ban tong hop va huong dan thao tac, khong sao chep toan bo code trong notebook goc. Hoc vien can mo notebook Colab that su cua lab de lay code khung day du.
+> Nguồn: VLearn Codelabs (codelabs.vlearn.dev) - Tài liệu này là bản tổng hợp và hướng dẫn thao tác, không sao chép toàn bộ code trong notebook gốc. Học viên cần mở notebook Colab thật sự của lab để lấy code khung đầy đủ.
 
 ---
 
-## LUU Y QUAN TRONG - DOC KY TRUOC KHI BAT DAU
+## LƯU Ý QUAN TRỌNG - ĐỌC KỸ TRƯỚC KHI BẮT ĐẦU
 
-1. **Muc tieu cot loi**: Xay pipeline Hybrid GraphRAG hoan chinh tren Neo4j (chunk -> coreference resolution -> NER/RE -> entity resolution -> bulk insert bang UNWIND -> graph traversal co kiem soat super-node -> hybrid retrieval), roi so sanh dinh luong voi Flat RAG (vector-only) bang Golden Dataset va LLM-as-a-Judge (do quality, latency, token usage).
+1. **Mục tiêu cốt lõi**: Xây pipeline Hybrid GraphRAG hoàn chỉnh trên Neo4j (chunk -> coreference resolution -> NER/RE -> entity resolution -> bulk insert bằng UNWIND -> graph traversal có kiểm soát super-node -> hybrid retrieval), rồi so sánh định lượng với Flat RAG (vector-only) bằng Golden Dataset và LLM-as-a-Judge (đo quality, latency, token usage).
 
-2. **Notebook da co code khung san**. Nhiem vu chinh KHONG phai viet lai toan bo pipeline, ma la: chay code, chinh prompt/threshold/retrieval policy cho phu hop, va thuyet minh (giai thich) ly do lua chon cua minh. Dung bo qua phan thuyet minh vi no chiem 20% diem.
+2. **Notebook đã có code khung sẵn**. Nhiệm vụ chính KHÔNG phải viết lại toàn bộ pipeline, mà là: chạy code, chỉnh prompt/threshold/retrieval policy cho phù hợp, và thuyết minh (giải thích) lý do lựa chọn của mình. Đừng bỏ qua phần thuyết minh vì nó chiếm 20% điểm.
 
-3. **Chuan bi Secrets TRUOC khi vao lab** (khai bao trong Colab Secrets, KHONG hard-code API key vao notebook):
-   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (va tuy chon `NEO4J_DATABASE`)
+3. **Chuẩn bị Secrets TRƯỚC khi vào lab** (khai báo trong Colab Secrets, KHÔNG hard-code API key vào notebook):
+   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (và tùy chọn `NEO4J_DATABASE`)
    - `GROQ_API_KEY`, `GROQ_MODEL`
-   - `HF_TOKEN` de stream dataset tu Hugging Face
-   - `JUDGE_PROVIDER` (openai hoac groq), `JUDGE_MODEL`, va `OPENAI_API_KEY` neu dung OpenAI lam judge
+   - `HF_TOKEN` để stream dataset từ Hugging Face
+   - `JUDGE_PROVIDER` (openai hoặc groq), `JUDGE_MODEL`, và `OPENAI_API_KEY` nếu dùng OpenAI làm judge
 
-4. **Dataset dung trong lab**: `HackerNoon/tech-company-news-data-dump` tren Hugging Face. Neu dataset yeu cau gated access, phai vao trang dataset tren Hugging Face bam Agree/Request access TRUOC khi chay cell stream du lieu, neu khong se bi loi khi load.
+4. **Dataset dùng trong lab**: `HackerNoon/tech-company-news-data-dump` trên Hugging Face. Nếu dataset yêu cầu gated access, phải vào trang dataset trên Hugging Face bấm Agree/Request access TRƯỚC khi chạy cell stream dữ liệu, nếu không sẽ bị lỗi khi load.
 
-5. **Scale guard - RAT QUAN TRONG**: Dataset goc ~350MB, KHONG duoc gui toan bo qua LLM trong 2 gio lab. Mac dinh dung subset voi cac gioi han:
-   - `LAB_MAX_ARTICLES = 1500` (so bai bao toi da sau dedup)
-   - `LAB_MAX_CHUNKS = 3000` (so chunk toi da dua vao Flat RAG index)
-   - `EXTRACTION_MAX_CHUNKS = 400` (so chunk toi da dua qua LLM de trich xuat triple)
-   - `LIMIT_MB = 300` khi stream dataset tu Hugging Face (co the tang sau buoi hoc)
-   Kien truc phai the hien kha nang scale duoc, con volume trong gio lab chi de chung minh pipeline chay dung.
+5. **Scale guard - RẤT QUAN TRỌNG**: Dataset gốc ~350MB, KHÔNG được gửi toàn bộ qua LLM trong 2 giờ lab. Mặc định dùng subset với các giới hạn:
+   - `LAB_MAX_ARTICLES = 1500` (số bài báo tối đa sau dedup)
+   - `LAB_MAX_CHUNKS = 3000` (số chunk tối đa đưa vào Flat RAG index)
+   - `EXTRACTION_MAX_CHUNKS = 400` (số chunk tối đa đưa qua LLM để trích xuất triple)
+   - `LIMIT_MB = 300` khi stream dataset từ Hugging Face (có thể tăng sau buổi học)
+   Kiến trúc phải thể hiện khả năng scale được, còn volume trong giờ lab chỉ để chứng minh pipeline chạy đúng.
 
-6. **3 failure-mode trong tam cua lab** (bat buoc xu ly it nhat 2/3 de dat rubric 30%):
-   - **Coreference sai** -> tao ra false edge (canh sai trong graph). Nguyen tac: chi resolve dai tu khi antecedent ro rang trong CUNG mot chunk, khong bao gio bay dat (invent) fact, giu nguyen so lieu/ngay/ticker/ten san pham, neu con nghi ngo (ambiguous) thi giu nguyen va log vao `unresolved_mentions`.
-   - **Entity Resolution sai** -> merge nham hai entity khac nhau (vi du hai cong ty ten giong nhau nhung khac nhau) hoac khong merge duoc cac bien the cua cung 1 entity (viet tat, ticker, alias). Can co "audit table" ghi lai moi quyet dinh merge/reject va similarity score.
-   - **Super-node** -> mot entity co qua nhieu canh (degree lon, vi du cong ty lon nhu Microsoft/Google) se lam "no" context khi traversal. Can co nguong `SUPER_NODE_DEGREE` va gioi han `SUPER_NODE_EDGE_CAP` khi expand.
+6. **3 failure-mode trọng tâm của lab** (bắt buộc xử lý ít nhất 2/3 để đạt rubric 30%):
+   - **Coreference sai** -> tạo ra false edge (cạnh sai trong graph). Nguyên tắc: chỉ resolve đại từ khi antecedent rõ ràng trong CÙNG một chunk, không bao giờ bịa đặt (invent) fact, giữ nguyên số liệu/ngày/ticker/tên sản phẩm, nếu còn nghi ngờ (ambiguous) thì giữ nguyên và log vào `unresolved_mentions`.
+   - **Entity Resolution sai** -> merge nhầm hai entity khác nhau (ví dụ hai công ty tên giống nhau nhưng khác nhau) hoặc không merge được các biến thể của cùng 1 entity (viết tắt, ticker, alias). Cần có "audit table" ghi lại mọi quyết định merge/reject và similarity score.
+   - **Super-node** -> một entity có quá nhiều cạnh (degree lớn, ví dụ công ty lớn như Microsoft/Google) sẽ làm "nổ" context khi traversal. Cần có ngưỡng `SUPER_NODE_DEGREE` và giới hạn `SUPER_NODE_EDGE_CAP` khi expand.
 
-7. **Rubric cham diem** (bam sat khi lam bai):
-   - 30% Chay duoc code: graph nap thanh cong, schema dung, xuat duoc bang so sanh.
-   - 30% Failure modes: xu ly duoc it nhat 2/3 van de Super-node, Entity Resolution, Coreference.
-   - 20% Evaluation: chay het Golden Dataset, phan tich hop ly.
-   - 20% Thuyet minh: giai thich duoc kien truc va cach kiem soat AI Coding Agent (neu dung).
+7. **Rubric chấm điểm** (bám sát khi làm bài):
+   - 30% Chạy được code: graph nạp thành công, schema đúng, xuất được bảng so sánh.
+   - 30% Failure modes: xử lý được ít nhất 2/3 vấn đề Super-node, Entity Resolution, Coreference.
+   - 20% Evaluation: chạy hết Golden Dataset, phân tích hợp lý.
+   - 20% Thuyết minh: giải thích được kiến trúc và cách kiểm soát AI Coding Agent (nếu dùng).
 
-8. **Golden Dataset**: Notebook chi co san 5 cau hoi mau (starter), trong do CHI CO 1 cau (G01) co san reference_answer. 4 cau con lai (G02-G05) phai duoc hoc vien tu dien `reference_answer` thuc te dua tren du lieu da nap vao Neo4j/Flat index TRUOC khi chay evaluation cuoi cung - day la buoc de bo qua trong khi lam bai, nen lam som.
+8. **Golden Dataset**: Notebook chỉ có sẵn 5 câu hỏi mẫu (starter), trong đó CHỈ CÓ 1 câu (G01) có sẵn reference_answer. 4 câu còn lại (G02-G05) phải được học viên tự điền `reference_answer` thực tế dựa trên dữ liệu đã nạp vào Neo4j/Flat index TRƯỚC khi chạy evaluation cuối cùng - đây là bước dễ bỏ qua trong khi làm bài, nên làm sớm.
 
-9. **Neu dung AI Coding Agent** (Cursor/Copilot/ChatGPT...) de ho tro code trong 2 "Challenge" (Near Dedup va Entity Resolution guard) hoac phan Bonus, phai neu ro trong bao cao: threshold da chon, false positive gap phai, cach audit cac cap bi merge, va nhung de xuat cua Agent ma ban KHONG dung kem ly do - day la mot muc trong phan thuyet minh 20%.
+9. **Nếu dùng AI Coding Agent** (Cursor/Copilot/ChatGPT...) để hỗ trợ code trong 2 "Challenge" (Near Dedup và Entity Resolution guard) hoặc phần Bonus, phải nêu rõ trong báo cáo: threshold đã chọn, false positive gặp phải, cách audit các cặp bị merge, và những đề xuất của Agent mà bạn KHÔNG dùng kèm lý do - đây là một mục trong phần thuyết minh 20%.
 
-10. **Nop bai**: Chuan bi san link GitHub/Drive/LMS chua notebook da chay xong (co output cell, khong can chay lai tu dau khi nop) va bang so sanh CSV.
+10. **Nộp bài**: Chuẩn bị sẵn link GitHub/Drive/LMS chứa notebook đã chạy xong (có output cell, không cần chạy lại từ đầu khi nộp) và bảng so sánh CSV.
 
 ---
 
-## Tong quan bai Lab
+## Tổng quan bài Lab
 
-Hoc vien xay dung mot pipeline Hybrid GraphRAG hoan chinh tren Neo4j, xu ly cac bai toan thuc te (coreference, entity resolution, super-node), roi so sanh dinh luong voi Flat RAG bang Golden Dataset va LLM-as-a-Judge.
+Học viên xây dựng một pipeline Hybrid GraphRAG hoàn chỉnh trên Neo4j, xử lý các bài toán thực tế (coreference, entity resolution, super-node), rồi so sánh định lượng với Flat RAG bằng Golden Dataset và LLM-as-a-Judge.
 
-Kien thuc/ky nang can co truoc khi lam lab: Python va pandas o muc co ban; khai niem RAG, embedding va vector search; Cypher/Neo4j o muc co ban (khong bat buoc vi da co code khung); cach goi LLM API (Groq/OpenAI) va xu ly JSON output.
+Kiến thức/kỹ năng cần có trước khi làm lab: Python và pandas ở mức cơ bản; khái niệm RAG, embedding và vector search; Cypher/Neo4j ở mức cơ bản (không bắt buộc vì đã có code khung); cách gọi LLM API (Groq/OpenAI) và xử lý JSON output.
 
-### Timeline de xuat (tong 120 phut)
+### Timeline đề xuất (tổng 120 phút)
 
-| Thoi gian | Noi dung |
+| Thời gian | Nội dung |
 |---|---|
-| 00-15 phut | Setup & Preprocessing: cai moi truong, load du lieu, dedup, chunk, coreference resolution |
-| 15-45 phut | Triple Extraction & Neo4j Bulk Insert: NER/RE, entity resolution bang vector similarity, bulk insert bang UNWIND |
-| 45-75 phut | Flat RAG & Hybrid GraphRAG: xay Flat RAG baseline, graph traversal co super-node mitigation, hybrid retrieval |
-| 75-105 phut | Golden Dataset & LLM-as-a-Judge: tao Golden Dataset, cham diem bang LLM-as-a-Judge, xuat bang so sanh hai kien truc |
-| 105-120 phut | Failure-mode Checks & Submission: kiem tra failure mode, lam bonus (tuy chon), export ket qua, thuyet minh ky thuat |
+| 00-15 phút | Setup & Preprocessing: cài môi trường, load dữ liệu, dedup, chunk, coreference resolution |
+| 15-45 phút | Triple Extraction & Neo4j Bulk Insert: NER/RE, entity resolution bằng vector similarity, bulk insert bằng UNWIND |
+| 45-75 phút | Flat RAG & Hybrid GraphRAG: xây Flat RAG baseline, graph traversal có super-node mitigation, hybrid retrieval |
+| 75-105 phút | Golden Dataset & LLM-as-a-Judge: tạo Golden Dataset, chấm điểm bằng LLM-as-a-Judge, xuất bảng so sánh hai kiến trúc |
+| 105-120 phút | Failure-mode Checks & Submission: kiểm tra failure mode, làm bonus (tùy chọn), export kết quả, thuyết minh kỹ thuật |
 
-### Ket thuc bai lab, ban se co
+### Kết thúc bài lab, bạn sẽ có
 
-- Xay dung duoc pipeline Hybrid GraphRAG end-to-end tren Neo4j bang bulk insert UNWIND.
-- Xu ly duoc Coreference Resolution, Entity Resolution va Super-node Mitigation trong thuc te.
-- So sanh dinh luong Flat RAG va GraphRAG bang Golden Dataset + LLM-as-a-Judge.
-- Giai thich duoc kien truc, trade-off latency/token va failure modes cua he thong RAG.
-
----
-
-## PHAN 1 - SETUP & PREPROCESSING (0-15 phut)
-
-### Buoc 1.0 - Tao Secrets tren Google Colab
-
-Vao bieu tuong chia khoa (Secrets) ben trai Colab, tao cac secret sau: `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `GROQ_API_KEY`, `GROQ_MODEL`, `HF_TOKEN`, `JUDGE_PROVIDER`, `JUDGE_MODEL`, `OPENAI_API_KEY` (neu judge la OpenAI). Nho bat toggle "Notebook access" cho tung secret. Tuyet doi khong dan API key truc tiep vao code cell.
-
-### Buoc 1.1 - Install thu vien
-
-Chay cell pip install cac package: neo4j, pandas, numpy, pyarrow, sentence-transformers, faiss-cpu, groq, openai, tqdm, networkx, spacy, datasets, langchain-community, llama-index. Doi cell chay xong hoan toan (co the mat 1-2 phut) truoc khi qua buoc sau.
-
-### Buoc 1.2 - Import va khai bao config
-
-Chay cell import (os, re, json, pandas, numpy, neo4j driver, sentence-transformers, faiss...) va set SEED=42 de ket qua reproducible. Ham `get_secret()` se doc secret tu Colab userdata truoc, neu khong co thi fallback sang bien moi truong - kiem tra ham nay chay khong loi tuc la secrets da duoc doc dung.
-
-Kiem tra lai cac hang so scale guard da duoc set dung: `LAB_MAX_ARTICLES=1500`, `LAB_MAX_CHUNKS=3000`, `EXTRACTION_MAX_CHUNKS=400`, `CHUNK_WORDS=220`, `CHUNK_OVERLAP_WORDS=40`.
-
-### Buoc 1.3 - Download dataset HackerNoon bang Hugging Face Streaming
-
-Cell nay stream truc tiep dataset `HackerNoon/tech-company-news-data-dump` va ghi dan ra file CSV `/content/hackernoon_subset.csv`, khong tai toan bo dataset vao RAM.
-
-- Neu dataset yeu cau gated access: mo trang dataset tren Hugging Face, dang nhap va bam Agree/Request access TRUOC, neu khong cell se loi authorization.
-- Hai co che dung: `LIMIT_ROWS` (so dong toi da) va `LIMIT_MB` (dung luong file toi da, mac dinh 300MB). Bien `PRIORITIZE_MB=True` nghia la uu tien dung theo dung luong MB; `False` nghia la progress bar theo so dong nhung van giu hard-stop LIMIT_ROWS.
-- Chay cell va cho den khi thay dong "Hoan thanh" voi so rows va dung luong file. Sau khi chay xong, bien `DATA_PATH` da tu dong tro ve file CSV vua tao, cell loader ke tiep chay truc tiep duoc.
-
-Neu gap loi: kiem tra lai (1) HF_TOKEN da dung chua, (2) da Agree/Request access tren Hugging Face chua, (3) ket noi mang cua Colab.
-
-### Buoc 1.4 - Ket noi Neo4j va tao schema
-
-Goi ham `connect_neo4j()` de ket noi driver Neo4j (dung Aura hoac instance tu host) - se in ra "Neo4j connected" neu thanh cong. Sau do goi `setup_graph_schema()` de tao constraint unique cho `Entity.id` va index cho `name_norm` cua Entity/Company/Person/Technology. Hai lenh nay dang bi comment (#) trong code khung - can bo comment va chay truoc khi qua Phan 2.
-
-### Buoc 1.5 - Load du lieu, exact dedup va chunking
-
-- `load_news(DATA_PATH)`: doc file CSV/JSON/Parquet thanh DataFrame.
-- `standardize_news(raw_df)`: tu dong nhan dien cot text/title/date/id (ho tro nhieu ten cot khac nhau), chuan hoa khoang trang, loai bai qua ngan (<80 ky tu), tinh hash `dedup_key` de loai bai trung lap tuyet doi (exact dedup), va lay mau (sample) toi da `LAB_MAX_ARTICLES` bai theo SEED co dinh de reproducible.
-- `build_chunks(news_df)`: cat moi bai bao thanh cac chunk ~220 tu, overlap 40 tu (sliding window), dat `chunk_id` dang `{article_id}::c{index}`, va dung lai khi vuot `LAB_MAX_CHUNKS`.
-- Bo comment 4 dong cuoi cell nay (`raw_df = load_news(...)`, `news_df = standardize_news(...)`, `chunks_df = build_chunks(...)`, `display(chunks_df.head())`) va chay de tao `chunks_df` - day la dau vao cho tat ca cac buoc sau.
-
-**Challenge A (AI Coding Agent - tuy chon nhung nen lam de cong diem thuyet minh)**: Exact hash dedup chi bat duoc ban sao chinh xac, KHONG bat duoc bai bi "repost"/gan trung (near-duplicate). Hay dung AI Agent thiet ke them MinHash/LSH, SimHash, hoac embedding+ANN de phat hien near-duplicate. Khong duoc chap nhan cach lam pairwise cosine O(N^2) tren toan dataset (qua cham). Trong bao cao can neu: threshold da chon, ty le false positive quan sat duoc, va cach ban audit (kiem tra lai) cac cap bi merge.
-
-### Buoc 1.6 - LLM wrapper co retry va JSON parsing
-
-Cell nay tao Groq client va 2 ham quan trong dung xuyen suot lab: `parse_json_object(text)` (bam ra JSON object tu output LLM, tu dong bo code-fence markdown) va `groq_chat(...)`/`groq_json(...)` (goi Groq API voi retry co exponential backoff toi da 4 lan, temperature=0.0 de on dinh, ho tro `json_mode=True`). Khong can sua gi o buoc nay, chi can chay de cac buoc sau su dung.
-
-### Buoc 1.7 - Coreference Resolution
-
-Day la buoc "chuan hoa" van ban truoc khi trich xuat, cuc ky quan trong vi coreference sai se tao ra canh (edge) sai trong graph sau nay.
-
-Nguyen tac bat buoc cua prompt coreference (da duoc thiet ke san trong `COREF_SYSTEM`): chi resolve dai tu/tham chieu khi antecedent duoc ho tro ro rang trong CUNG mot chunk; khong duoc bay dat (invent) fact moi; phai giu nguyen ngay thang, so lieu, ma ticker va ten san pham; neu con nghi ngo (ambiguous) thi giu nguyen text goc va log vao mang `unresolved_mentions`.
-
-- Ham `resolve_coref_batch(batch_df)` gui tung batch nho (mac dinh 5 chunk/batch) qua LLM va tra ve `resolved_text` cung `unresolved_mentions`.
-- Ham `run_coref(chunks_subset, batch_size=5)` lap qua toan bo subset, neu 1 batch loi thi fallback giu nguyen text goc va gan flag `COREF_BATCH_FAILED` de khong lam sap ca pipeline.
-- Bo comment 3 dong cuoi: lay `extraction_source = chunks_df.head(EXTRACTION_MAX_CHUNKS)`, chay `coref_df = run_coref(extraction_source)`, roi merge ket qua vao `extraction_source`. Day la du lieu dau vao cho buoc trich xuat triple o Phan 2.
-- **Nen lam**: sau khi chay xong, xem qua vai dong `unresolved_mentions` khac rong de hieu cac truong hop LLM tu choi resolve - se can khi tra loi cau hoi thuyet minh o Phan 5.
+- Xây dựng được pipeline Hybrid GraphRAG end-to-end trên Neo4j bằng bulk insert UNWIND.
+- Xử lý được Coreference Resolution, Entity Resolution và Super-node Mitigation trong thực tế.
+- So sánh định lượng Flat RAG và GraphRAG bằng Golden Dataset + LLM-as-a-Judge.
+- Giải thích được kiến trúc, trade-off latency/token và failure modes của hệ thống RAG.
 
 ---
 
-## PHAN 2 - TRIPLE EXTRACTION & NEO4J BULK INSERT (15-45 phut)
+## PHẦN 1 - SETUP & PREPROCESSING (0-15 phút)
 
-### Graph schema can tuan thu
+### Bước 1.0 - Tạo Secrets trên Google Colab
 
-- Node types (co label goc `Entity`): `Company`, `Person`, `Technology`.
-- Relation types duoc phep (allowlist): `ACQUIRED`, `DEVELOPED`, `INVESTED_IN`, `FOUNDED`, `WORKED_AT`, `PARTNERED_WITH`, `USES`, `LEADS`.
-- Moi edge bat buoc phai co `source_chunk_id` va `published_date` (provenance - de biet thong tin lay tu dau); khuyen nghi them `evidence` (cau trich dan) va `confidence` (do tin cay).
-- Relation type sinh ra tu LLM phai duoc loc qua allowlist truoc khi ghep vao cau lenh Cypher, tuyet doi khong noi truc tiep string tu LLM vao Cypher de tranh injection va relation "la".
+Vào biểu tượng chìa khóa (Secrets) bên trái Colab, tạo các secret sau: `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `GROQ_API_KEY`, `GROQ_MODEL`, `HF_TOKEN`, `JUDGE_PROVIDER`, `JUDGE_MODEL`, `OPENAI_API_KEY` (nếu judge là OpenAI). Nhớ bật toggle "Notebook access" cho từng secret. Tuyệt đối không dán API key trực tiếp vào code cell.
 
-### Buoc 2.1 - NER + RE Extraction (trich xuat thuc the va quan he)
+### Bước 1.1 - Install thư viện
 
-- `EXTRACT_SYSTEM` yeu cau LLM chi trich xuat quan he thuoc allowlist, uu tien precision hon recall (chi lay quan he chac chan, bo qua neu khong ro), va moi quan he phai co doan evidence ngan kem theo.
-- Ham `extract_batch(batch_df)` gui batch chunk (dung `resolved_text` tu buoc coref neu co, fallback text goc) qua LLM, yeu cau tra ve JSON co cau truc `items -> relations` gom source/source_type/relation/target/target_type/evidence/confidence.
-- Ham `run_extraction(source_df, batch_size=4)` lap qua toan bo extraction_source, loc bo cac quan he khong hop le (source/target rong, type khong thuoc allowlist, relation khong thuoc allowlist), gom thanh `raw_triples_df`; batch loi duoc ghi vao `errors_df` de audit.
-- Bo comment cuoi cell, chay `raw_triples_df, extraction_errors_df = run_extraction(extraction_source)` va xem `raw_triples_df.head()`. Neu `extraction_errors_df` co nhieu dong, can xem lai batch_size hoac rate limit cua Groq.
+Chạy cell pip install các package: neo4j, pandas, numpy, pyarrow, sentence-transformers, faiss-cpu, groq, openai, tqdm, networkx, spacy, datasets, langchain-community, llama-index. Đợi cell chạy xong hoàn toàn (có thể mất 1-2 phút) trước khi qua bước sau.
 
-### Buoc 2.2 - Entity Resolution bang Vector Similarity
+### Bước 1.2 - Import và khai báo config
 
-Muc tieu: gop cac cach viet khac nhau cua CUNG mot thuc the (vi du "MSFT", "Microsoft Corp", "Microsoft Corporation" -> "Microsoft") nhung KHONG gop nham hai thuc the khac nhau. Pipeline gom 4 buoc:
+Chạy cell import (os, re, json, pandas, numpy, neo4j driver, sentence-transformers, faiss...) và set SEED=42 để kết quả reproducible. Hàm `get_secret()` sẽ đọc secret từ Colab userdata trước, nếu không có thì fallback sang biến môi trường - kiểm tra hàm này chạy không lỗi tức là secrets đã được đọc đúng.
 
-1. **Manual aliases**: bang `MANUAL_ALIASES` cho cac ticker/ten rat pho bien (msft, googl, aapl...) - map thang ve ten chuan, uu tien cao nhat.
-2. **Embedding ANN candidate**: dung `sentence-transformers/all-MiniLM-L6-v2` encode ten entity, dung FAISS IndexFlatIP tim top-k lang gieng gan nhat theo cosine similarity, mac dinh `threshold=0.90`.
-3. **Lexical guard** (`merge_guard`): sau khi vuot threshold embedding, con phai qua kiem tra lexical (bo suffix Inc/Corp/Ltd... roi so sanh chuoi bang SequenceMatcher ratio >= 0.72) moi duoc merge thuc su - day la lop bao ve giam false merge; cap nao vuot threshold embedding nhung khong qua guard se bi danh dau `REJECT_GUARD`.
-4. **Union-Find (UF)** de gop nhom cac entity da duoc phep merge, chon ten canonical la ten xuat hien nhieu nhat (hoac ngan/gon nhat khi hoa).
-5. Xuat ra `entity_resolution_audit_df` ghi lai moi cap (left, right, similarity, decision: MERGE_MANUAL/MERGE_VECTOR/REJECT_GUARD) - bang nay la bang chung bat buoc phai nop.
+Kiểm tra lại các hằng số scale guard đã được set đúng: `LAB_MAX_ARTICLES=1500`, `LAB_MAX_CHUNKS=3000`, `EXTRACTION_MAX_CHUNKS=400`, `CHUNK_WORDS=220`, `CHUNK_OVERLAP_WORDS=40`.
 
-- Bo comment chay: `entity_map, entity_resolution_audit_df = build_resolution_map(raw_triples_df)` roi `triples_df = canonicalize_triples(raw_triples_df, entity_map)`. Xem `entity_resolution_audit_df.head(20)` de kiem tra cac quyet dinh merge co hop ly khong.
-- **Nen lam**: thu doi `threshold` (vi du 0.85 hoac 0.95) va quan sat so luong MERGE_VECTOR/REJECT_GUARD thay doi ra sao - day chinh la du lieu can cho phan thuyet minh "entity threshold bao nhieu, vi sao".
+### Bước 1.3 - Download dataset HackerNoon bằng Hugging Face Streaming
 
-**Challenge B (AI Coding Agent - tuy chon)**: Cai tien lexical guard de xu ly tot hon cac truong hop: ticker (vi du TSLA vs Tesla), suffix cong ty (Inc./Corp./Ltd.), san pham co chua ten cong ty (vi du "Google Search" khong duoc merge voi "Google" o muc entity Company neu that su la 2 loai khac nhau), va nguoi trung ho/ten gan giong nhau (khong duoc merge nham 2 nguoi khac nhau).
+Cell này stream trực tiếp dataset `HackerNoon/tech-company-news-data-dump` và ghi dần ra file CSV `/content/hackernoon_subset.csv`, không tải toàn bộ dataset vào RAM.
 
-### Buoc 2.3 - Bang Node va Bulk Insert bang UNWIND
+- Nếu dataset yêu cầu gated access: mở trang dataset trên Hugging Face, đăng nhập và bấm Agree/Request access TRƯỚC, nếu không cell sẽ lỗi authorization.
+- Hai cơ chế dừng: `LIMIT_ROWS` (số dòng tối đa) và `LIMIT_MB` (dung lượng file tối đa, mặc định 300MB). Biến `PRIORITIZE_MB=True` nghĩa là ưu tiên dừng theo dung lượng MB; `False` nghĩa là progress bar theo số dòng nhưng vẫn giữ hard-stop LIMIT_ROWS.
+- Chạy cell và chờ đến khi thấy dòng "Hoàn thành" với số rows và dung lượng file. Sau khi chạy xong, biến `DATA_PATH` đã tự động trỏ về file CSV vừa tạo, cell loader kế tiếp chạy trực tiếp được.
 
-- `build_nodes(triples_df)`: gom tat ca source/target thanh mot bang node duy nhat, group theo (id, name, name_norm, type), gop het cac bien the (alias) tung xuat hien thanh danh sach `aliases`/`aliases_norm` luu tren node - giup sau nay match seed entity nhanh hon.
-- `bulk_insert_nodes(nodes_df, batch_size=1000)`: VOI TUNG LOAI NODE (Company/Person/Technology), dung `UNWIND $rows AS row MERGE (n:Entity {id: row.id}) SET n:Type, ...` de insert theo lo (batch 1000 dong/lan) - đây chính là yêu cầu bat buoc "bulk insert bang UNWIND, khong insert tung row" cua lab.
-- `bulk_insert_edges(triples_df, batch_size=1000)`: kiem tra truoc rang du lieu co du cot `source_chunk_id` va `published_date` (provenance bat buoc), sau do voi tung loai relation, dung `UNWIND $rows AS row MATCH (s)...MATCH (t)...MERGE (s)-[r:REL {source_chunk_id: row.source_chunk_id}]->(t) SET r.published_date=..., r.evidence=..., r.confidence=...` theo batch.
-- Bo comment 3 dong cuoi, chay theo dung thu tu: `nodes_df = build_nodes(triples_df)` -> `bulk_insert_nodes(nodes_df)` -> `bulk_insert_edges(triples_df)`.
+Nếu gặp lỗi: kiểm tra lại (1) HF_TOKEN đã đúng chưa, (2) đã Agree/Request access trên Hugging Face chưa, (3) kết nối mạng của Colab.
 
-### Buoc 2.4 - Sanity checks (kiem tra suc khoe du lieu)
+### Bước 1.4 - Kết nối Neo4j và tạo schema
 
-Ham `graph_checks()` chay 3 kiem tra: (1) dem so canh bi thieu provenance (`source_chunk_id` hoac `published_date` null) - PHAI BANG 0, co `assert invalid == 0` de chan lab neu sai; (2) tong so node va edge trong graph; (3) top 15 node co degree (so canh) cao nhat - day chinh la danh sach ung vien "super-node" se dung o Phan 3 va Phan 5.
+Gọi hàm `connect_neo4j()` để kết nối driver Neo4j (dùng Aura hoặc instance tự host) - sẽ in ra "Neo4j connected" nếu thành công. Sau đó gọi `setup_graph_schema()` để tạo constraint unique cho `Entity.id` và index cho `name_norm` của Entity/Company/Person/Technology. Hai lệnh này đang bị comment (#) trong code khung - cần bỏ comment và chạy trước khi qua Phần 2.
 
-Bo comment chay `graph_counts, top_degree_df = graph_checks()` va luu lai bang `top_degree_df` de doi chieu voi buoc kiem tra super-node sau nay.
+### Bước 1.5 - Load dữ liệu, exact dedup và chunking
 
----
+- `load_news(DATA_PATH)`: đọc file CSV/JSON/Parquet thành DataFrame.
+- `standardize_news(raw_df)`: tự động nhận diện cột text/title/date/id (hỗ trợ nhiều tên cột khác nhau), chuẩn hóa khoảng trắng, loại bài quá ngắn (<80 ký tự), tính hash `dedup_key` để loại bài trùng lặp tuyệt đối (exact dedup), và lấy mẫu (sample) tối đa `LAB_MAX_ARTICLES` bài theo SEED cố định để reproducible.
+- `build_chunks(news_df)`: cắt mỗi bài báo thành các chunk ~220 từ, overlap 40 từ (sliding window), đặt `chunk_id` dạng `{article_id}::c{index}`, và dừng lại khi vượt `LAB_MAX_CHUNKS`.
+- Bỏ comment 4 dòng cuối cell này (`raw_df = load_news(...)`, `news_df = standardize_news(...)`, `chunks_df = build_chunks(...)`, `display(chunks_df.head())`) và chạy để tạo `chunks_df` - đây là đầu vào cho tất cả các bước sau.
 
-## PHAN 3 - FLAT RAG & HYBRID GRAPHRAG (45-75 phut)
+**Challenge A (AI Coding Agent - tùy chọn nhưng nên làm để cộng điểm thuyết minh)**: Exact hash dedup chỉ bắt được bản sao chính xác, KHÔNG bắt được bài bị "repost"/gần trùng (near-duplicate). Hãy dùng AI Agent thiết kế thêm MinHash/LSH, SimHash, hoặc embedding+ANN để phát hiện near-duplicate. Không được chấp nhận cách làm pairwise cosine O(N^2) trên toàn dataset (quá chậm). Trong báo cáo cần nêu: threshold đã chọn, tỷ lệ false positive quan sát được, và cách bạn audit (kiểm tra lại) các cặp bị merge.
 
-Nguyen tac so sanh cong bang: ca hai kien truc dung CUNG mot embedding model va CUNG mot generator LLM, chi khac nhau ve CACH RETRIEVE context - de phan tich tap trung vao kien truc retrieval, khong bi nhieu boi model khac nhau.
+### Bước 1.6 - LLM wrapper có retry và JSON parsing
 
-### Buoc 3.1 - Xay Flat RAG baseline
+Cell này tạo Groq client và 2 hàm quan trọng dùng xuyên suốt lab: `parse_json_object(text)` (bóc tách JSON object từ output LLM, tự động bỏ code-fence markdown) và `groq_chat(...)`/`groq_json(...)` (gọi Groq API với retry có exponential backoff tối đa 4 lần, temperature=0.0 để ổn định, hỗ trợ `json_mode=True`). Không cần sửa gì ở bước này, chỉ cần chạy để các bước sau sử dụng.
 
-- `build_flat_index(chunks_df)`: encode toan bo `chunks_df.text` bang sentence-transformers (normalize_embeddings=True), dua vao FAISS `IndexFlatIP` (inner product = cosine tren vector da normalize).
-- `retrieve_flat_context(query, k=6)`: encode cau hoi, tim k chunk gan nhat, tra ve context da ghep chuoi kem `chunk_id`, `published_date`, `score` (de trace duoc provenance) va DataFrame ket qua.
-- Bo comment chay `build_flat_index(chunks_df)`.
+### Bước 1.7 - Coreference Resolution
 
-### Luong xu ly cua Graph Retrieval (tong quan truoc khi doc code)
+Đây là bước "chuẩn hóa" văn bản trước khi trích xuất, cực kỳ quan trọng vì coreference sai sẽ tạo ra cạnh (edge) sai trong graph sau này.
 
-1. LLM trich xuat "seed entities" tu cau hoi.
-2. Tim seed do trong Neo4j (khop chinh xac ten/alias truoc), neu khong co thi fallback bang embedding fuzzy match.
-3. BFS (duyet theo chieu rong) tu cac seed, toi da `max_hops` buoc.
-4. Neu mot node co degree > 100 (super-node) thi chi lay toi da 50 canh MOI NHAT cua node do, khong lay het.
-5. Co gioi han tong so canh toan cuc (global edge cap) de tranh "no" context (context explosion).
-6. Chuyen subgraph thu duoc thanh text co kem provenance (ngay, chunk_id, evidence) de dua vao prompt.
+Nguyên tắc bắt buộc của prompt coreference (đã được thiết kế sẵn trong `COREF_SYSTEM`): chỉ resolve đại từ/tham chiếu khi antecedent được hỗ trợ rõ ràng trong CÙNG một chunk; không được bịa đặt (invent) fact mới; phải giữ nguyên ngày tháng, số liệu, mã ticker và tên sản phẩm; nếu còn nghi ngờ (ambiguous) thì giữ nguyên text gốc và log vào mảng `unresolved_mentions`.
 
-### Buoc 3.2 - Seed matching (khop thuc the hat giong)
-
-- `extract_seeds(query)`: goi LLM (`SEED_SYSTEM` yeu cau KHONG tra loi cau hoi, chi trich seed entity thuoc 3 loai Company/Person/Technology) de lay danh sach ten thuc the tiem nang tu cau hoi nguoi dung.
-- `build_entity_matcher(nodes_df)`: encode truoc ten tat ca node trong graph thanh vector, luu vao `entity_match_vectors`/`entity_match_store` de tra cuu nhanh (chay 1 lan sau khi co `nodes_df`).
-- `match_seeds(query, fuzzy_threshold=0.66)`: voi moi seed, thu tim EXACT match trong Neo4j qua `name_norm`/`aliases_norm` truoc; neu khong co ket qua moi fallback sang so sanh embedding (cosine) voi nguong 0.66 va lay node co similarity cao nhat.
-- Bo comment chay `build_entity_matcher(nodes_df)` sau khi da co `nodes_df` tu Phan 2.
-
-### Buoc 3.3 - Graph traversal + Super-node mitigation
-
-Cac tham so kiem soat (co the tinh chinh va giai thich trong bao cao):
-- `SUPER_NODE_DEGREE = 100` - nguong de coi mot node la "super-node".
-- `SUPER_NODE_EDGE_CAP = 50` - so canh toi da duoc lay tu mot super-node.
-- `GLOBAL_EDGE_CAP = 250` - tong so canh toi da thu thap cho toan bo qua trinh traversal cua 1 cau hoi.
-- `MAX_GRAPH_CONTEXT_CHARS = 14000` - do dai toi da (ky tu) cua context dang text dua vao prompt.
-
-- `node_degree(node_id)`: dem so canh (ke ca 2 chieu) cua mot node bang Cypher.
-- `recent_edges(node_id, limit)`: lay toi da `limit` canh, SAP XEP THEO NGAY MOI NHAT TRUOC (ORDER BY published_date DESC) - day la 1 policy can duoc giai thich/danh gia trong bao cao (uu tien tin moi co the dung hoac sai tuy loai cau hoi).
-- `textualize(edges)`: chuyen list canh thanh cac dong text dang "A [Type] -RELATION-> B [Type] | date=... | chunk=... | evidence=...", cat bot khi vuot `MAX_GRAPH_CONTEXT_CHARS`.
-- `retrieve_graph_context(query, max_hops=2, edge_limit=50, return_debug=False)`: dung hang doi (deque) de BFS tu cac seed da match; voi moi node duoc "expand" thi kiem tra degree, neu vuot `SUPER_NODE_DEGREE` thi gioi han lai edge_limit ve toi da `SUPER_NODE_EDGE_CAP` (va ghi lai vao `supernode_events` de audit); dung lai khi dat `GLOBAL_EDGE_CAP` hoac het frontier. Ket qua tra ve gom context da textualize, DataFrame edges, va diagnostics (seed da match, so node da expand, so canh thu duoc, danh sach supernode_events).
-
-### Buoc 3.4 - Sinh cau tra loi: Flat vs Hybrid GraphRAG
-
-- `ANSWER_SYSTEM` yeu cau LLM chi tra loi tu context duoc cung cap, khong bay dat, phai trich dan provenance dang `[chunk_id=...]`, va phai noi ro neu bang chung khong du/mau thuan.
-- `generate_answer(question, context)`: goi LLM sinh cau tra loi, do luon `latency_s` (thoi gian) va `total_tokens` (usage) - hai chi so nay se dung cho bang so sanh Phan 4.
-- `answer_flat_rag(question)`: retrieve 6 chunk gan nhat bang Flat RAG roi sinh cau tra loi.
-- `answer_graph_rag(question)`: day chinh la kien truc **Hybrid** - lay ca graph context (`retrieve_graph_context`, max_hops=2) VA vector context (4 chunk qua `retrieve_flat_context`), ghep 2 phan context lai ("=== GRAPH ===" va "=== VECTOR ===") roi moi sinh cau tra loi. Day la ly do lab goi la "Hybrid GraphRAG" chu khong phai graph-only.
-
-**Nen lam ngay**: Thu chay `answer_flat_rag()` va `answer_graph_rag()` voi vai cau hoi mau de kiem tra pipeline chay end-to-end thong suot truoc khi qua Phan 4 (chay hang loat qua Golden Dataset se ton thoi gian/token, nen debug tung cau truoc).
+- Hàm `resolve_coref_batch(batch_df)` gửi từng batch nhỏ (mặc định 5 chunk/batch) qua LLM và trả về `resolved_text` cùng `unresolved_mentions`.
+- Hàm `run_coref(chunks_subset, batch_size=5)` lặp qua toàn bộ subset, nếu 1 batch lỗi thì fallback giữ nguyên text gốc và gắn flag `COREF_BATCH_FAILED` để không làm sập cả pipeline.
+- Bỏ comment 3 dòng cuối: lấy `extraction_source = chunks_df.head(EXTRACTION_MAX_CHUNKS)`, chạy `coref_df = run_coref(extraction_source)`, rồi merge kết quả vào `extraction_source`. Đây là dữ liệu đầu vào cho bước trích xuất triple ở Phần 2.
+- **Nên làm**: sau khi chạy xong, xem qua vài dòng `unresolved_mentions` khác rỗng để hiểu các trường hợp LLM từ chối resolve - sẽ cần khi trả lời câu hỏi thuyết minh ở Phần 5.
 
 ---
 
-## PHAN 4 - GOLDEN DATASET & LLM-AS-A-JUDGE (75-105 phut)
+## PHẦN 2 - TRIPLE EXTRACTION & NEO4J BULK INSERT (15-45 phút)
 
-### Buoc 4.1 - Chuan bi Golden Dataset
+### Graph schema cần tuân thủ
 
-Schema Golden Dataset gom: `id`, `group` (loai cau hoi: factoid/multi-hop/cross-doc), `question`, `reference_answer`, va tuy chon `reference_evidence`.
+- Node types (có label gốc `Entity`): `Company`, `Person`, `Technology`.
+- Relation types được phép (allowlist): `ACQUIRED`, `DEVELOPED`, `INVESTED_IN`, `FOUNDED`, `WORKED_AT`, `PARTNERED_WITH`, `USES`, `LEADS`.
+- Mọi edge bắt buộc phải có `source_chunk_id` và `published_date` (provenance - để biết thông tin lấy từ đâu); khuyến nghị thêm `evidence` (câu trích dẫn) và `confidence` (độ tin cậy).
+- Relation type sinh ra từ LLM phải được lọc qua allowlist trước khi ghép vào câu lệnh Cypher, tuyệt đối không nối trực tiếp string từ LLM vào Cypher để tránh injection và relation "lạ".
 
-Notebook co san 5 cau hoi starter:
-- G01 (factoid) - DA CO reference_answer mau.
-- G02 (multi-hop) - "Startup nao duoc thanh lap boi cuu nhan vien Microsoft va sau do nhan von dau tu tu Google?" - CHUA co reference_answer, phai dien.
-- G03 (cross-doc) - So sanh huong dau tu AI cua Meta va Apple trong 2023 tu nhieu bai bao - CHUA co reference_answer, phai dien.
-- G04 (multi-hop) - Tim cong ty duoc dau tu boi mot cong ty cong nghe lon va cung phat trien mot cong nghe AI cu the - CHUA co reference_answer, phai dien.
-- G05 (cross-doc) - Tim mot cong nghe lien quan cung mot cong ty qua it nhat 2 chunk khac nhau, tom tat thay doi theo thoi gian - CHUA co reference_answer, phai dien.
+### Bước 2.1 - NER + RE Extraction (trích xuất thực thể và quan hệ)
 
-**Buoc bat buoc, KHONG duoc bo qua**: Voi 4 cau G02-G05, ban phai tu tra cuu trong chinh du lieu `chunks_df`/graph da nap (dung Cypher hoac tim kiem text) de dien `reference_answer` THAT (dung voi du lieu thuc te da load, khong bay dat), roi luu ra file `golden_dataset.csv` (duong dan `GOLDEN_PATH`). Ham `validate_golden(df, require_answers=True)` se raise loi va in ra danh sach cau con thieu reference_answer neu ban chua dien du - hay chay ham nay som de biet minh con thieu cau nao.
+- `EXTRACT_SYSTEM` yêu cầu LLM chỉ trích xuất quan hệ thuộc allowlist, ưu tiên precision hơn recall (chỉ lấy quan hệ chắc chắn, bỏ qua nếu không rõ), và mỗi quan hệ phải có đoạn evidence ngắn kèm theo.
+- Hàm `extract_batch(batch_df)` gửi batch chunk (dùng `resolved_text` từ bước coref nếu có, fallback text gốc) qua LLM, yêu cầu trả về JSON có cấu trúc `items -> relations` gồm source/source_type/relation/target/target_type/evidence/confidence.
+- Hàm `run_extraction(source_df, batch_size=4)` lặp qua toàn bộ extraction_source, lọc bỏ các quan hệ không hợp lệ (source/target rỗng, type không thuộc allowlist, relation không thuộc allowlist), gom thành `raw_triples_df`; batch lỗi được ghi vào `errors_df` để audit.
+- Bỏ comment cuối cell, chạy `raw_triples_df, extraction_errors_df = run_extraction(extraction_source)` và xem `raw_triples_df.head()`. Nếu `extraction_errors_df` có nhiều dòng, cần xem lại batch_size hoặc rate limit của Groq.
 
-**Goi y**: Neu cau hoi mau (vi du G02) khong tim thay du lieu phu hop trong subset da lay mau ngau nhien (vi du khong co cong ty nao thoa dieu kien "tung lam Microsoft roi duoc Google dau tu"), ban duoc phep sua lai noi dung cau hoi cho phu hop voi du lieu thuc te dang co, miem la van giu dung LOAI cau hoi (factoid/multi-hop/cross-doc) va giai thich ly do thay doi trong phan thuyet minh.
+### Bước 2.2 - Entity Resolution bằng Vector Similarity
 
-### Buoc 4.2 - LLM-as-a-Judge
+Mục tiêu: gộp các cách viết khác nhau của CÙNG một thực thể (ví dụ "MSFT", "Microsoft Corp", "Microsoft Corporation" -> "Microsoft") nhưng KHÔNG gộp nhầm hai thực thể khác nhau. Pipeline gồm 4 bước:
 
-- `JUDGE_SYSTEM`: yeu cau judge cham nghiem khac tren thang 1-5 cho 3 tieu chi: `comprehensiveness` (do day du), `faithfulness` (do trung thuc voi context duoc cung cap - khong bay dat), `multi_hop_reasoning` (do chinh xac cua suy luan nhieu buoc), dung reference_answer lam moc dung/sai.
-- `judge_json(system, user)`: linh hoat chon provider judge qua `JUDGE_PROVIDER` - neu la "groq" thi dung lai ham groq_json, neu la "openai" thi goi OpenAI Chat Completions voi `response_format=json_object`.
-- `judge_answer(question, reference, answer, context)`: dong goi prompt judge day du (cau hoi, reference, candidate answer, candidate context toi da 18000 ky tu), ep diem ve khoang [1,5], tra ve dict 3 diem so + `rationale` (giai trinh 2-5 cau).
-**Luu y**: judge nen dung MODEL KHAC hoac it nhat prompt doc lap voi model sinh cau tra loi de giam thien vi tu-danh-gia; neu dung OpenAI lam judge se ton chi phi rieng, kiem tra `OPENAI_API_KEY` truoc.
+1. **Manual aliases**: bảng `MANUAL_ALIASES` cho các ticker/tên rất phổ biến (msft, googl, aapl...) - map thẳng về tên chuẩn, ưu tiên cao nhất.
+2. **Embedding ANN candidate**: dùng `sentence-transformers/all-MiniLM-L6-v2` encode tên entity, dùng FAISS IndexFlatIP tìm top-k láng giềng gần nhất theo cosine similarity, mặc định `threshold=0.90`.
+3. **Lexical guard** (`merge_guard`): sau khi vượt threshold embedding, còn phải qua kiểm tra lexical (bỏ suffix Inc/Corp/Ltd... rồi so sánh chuỗi bằng SequenceMatcher ratio >= 0.72) mới được merge thực sự - đây là lớp bảo vệ giảm false merge; cặp nào vượt threshold embedding nhưng không qua guard sẽ bị đánh dấu `REJECT_GUARD`.
+4. **Union-Find (UF)** để gộp nhóm các entity đã được phép merge, chọn tên canonical là tên xuất hiện nhiều nhất (hoặc ngắn/gọn nhất khi hòa).
+5. Xuất ra `entity_resolution_audit_df` ghi lại mọi cặp (left, right, similarity, decision: MERGE_MANUAL/MERGE_VECTOR/REJECT_GUARD) - bảng này là bằng chứng bắt buộc phải nộp.
 
-### Buoc 4.3 - Chay Evaluation + checkpoint
+- Bỏ comment chạy: `entity_map, entity_resolution_audit_df = build_resolution_map(raw_triples_df)` rồi `triples_df = canonicalize_triples(raw_triples_df, entity_map)`. Xem `entity_resolution_audit_df.head(20)` để kiểm tra các quyết định merge có hợp lý không.
+- **Nên làm**: thử đổi `threshold` (ví dụ 0.85 hoặc 0.95) và quan sát số lượng MERGE_VECTOR/REJECT_GUARD thay đổi ra sao - đây chính là dữ liệu cần cho phần thuyết minh "entity threshold bao nhiêu, vì sao".
 
-Ham `run_evaluation(golden_df)` lap qua tung cau trong Golden Dataset, chay CA `answer_flat_rag` VA `answer_graph_rag`, cham diem CA HAI bang judge, roi gop tat ca vao 1 dong ket qua (bao gom 3 diem judge, latency, token, so luong supernode_events, rationale) va LUU CHECKPOINT ra CSV sau MOI LAN CHAY XONG (khong phai cho het moi luu 1 lan) - de tranh mat toan bo ket qua neu Colab bi disconnect giua luc chay.
+**Challenge B (AI Coding Agent - tùy chọn)**: Cải tiến lexical guard để xử lý tốt hơn các trường hợp: ticker (ví dụ TSLA vs Tesla), suffix công ty (Inc./Corp./Ltd.), sản phẩm có chứa tên công ty (ví dụ "Google Search" không được merge với "Google" ở mức entity Company nếu thật sự là 2 loại khác nhau), và người trùng họ/tên gần giống nhau (không được merge nhầm 2 người khác nhau).
 
-Truoc khi chay full: goi `validate_golden(golden_df, require_answers=True)` de chan lai neu con cau thieu reference_answer. Sau do moi bo comment chay `eval_results_df = run_evaluation(golden_df)`. Vi mot cau chay ca 2 kien truc + 2 lan judge (4 loi goi LLM/cau), voi 5 cau se ton khoang 20 loi goi LLM - can du kien thoi gian cho.
+### Bước 2.3 - Bảng Node và Bulk Insert bằng UNWIND
 
-### Buoc 4.4 - Bang so sanh + export
+- `build_nodes(triples_df)`: gom tất cả source/target thành một bảng node duy nhất, group theo (id, name, name_norm, type), gộp hết các biến thể (alias) từng xuất hiện thành danh sách `aliases`/`aliases_norm` lưu trên node - giúp sau này match seed entity nhanh hơn.
+- `bulk_insert_nodes(nodes_df, batch_size=1000)`: VỚI TỪNG LOẠI NODE (Company/Person/Technology), dùng `UNWIND $rows AS row MERGE (n:Entity {id: row.id}) SET n:Type, ...` để insert theo lô (batch 1000 dòng/lần) - đây chính là yêu cầu bắt buộc "bulk insert bằng UNWIND, không insert từng row" của lab.
+- `bulk_insert_edges(triples_df, batch_size=1000)`: kiểm tra trước rằng dữ liệu có đủ cột `source_chunk_id` và `published_date` (provenance bắt buộc), sau đó với từng loại relation, dùng `UNWIND $rows AS row MATCH (s)...MATCH (t)...MERGE (s)-[r:REL {source_chunk_id: row.source_chunk_id}]->(t) SET r.published_date=..., r.evidence=..., r.confidence=...` theo batch.
+- Bỏ comment 3 dòng cuối, chạy theo đúng thứ tự: `nodes_df = build_nodes(triples_df)` -> `bulk_insert_nodes(nodes_df)` -> `bulk_insert_edges(triples_df)`.
 
-Ham `comparison_table(eval_df)` group theo `group` (loai cau hoi), tinh trung binh 5 metric (Comprehensiveness, Faithfulness, Multi-hop reasoning, Latency, Token usage) cho ca Flat RAG va GraphRAG, VA TU DONG SINH NHAN XET: voi Latency/Token thi Flat RAG re/nhanh hon la binh thuong; voi 3 metric chat luong, neu GraphRAG hon >= 0.75 diem thi ghi nhan "cai thien ro", neu kem hon <= -0.5 diem thi ghi "Flat RAG tot hon, graph extraction/retrieval co the gay mat thong tin hoac nhieu", con lai la "hai phuong phap gan nhau".
+### Bước 2.4 - Sanity checks (kiểm tra sức khỏe dữ liệu)
 
-Bo comment chay `comparison_df = comparison_table(eval_results_df)`, roi export 2 file bat buoc: `eval_results_df.to_csv("/content/graphrag_eval_results.csv")` va `comparison_df.to_csv("/content/graphrag_vs_flatrag_summary.csv")`. Day la 2 file can nop kem notebook.
+Hàm `graph_checks()` chạy 3 kiểm tra: (1) đếm số cạnh bị thiếu provenance (`source_chunk_id` hoặc `published_date` null) - PHẢI BẰNG 0, có `assert invalid == 0` để chặn lab nếu sai; (2) tổng số node và edge trong graph; (3) top 15 node có degree (số cạnh) cao nhất - đây chính là danh sách ứng viên "super-node" sẽ dùng ở Phần 3 và Phần 5.
 
----
-
-## PHAN 5 - FAILURE-MODE CHECKS & SUBMISSION (105-120 phut)
-
-Phan nay yeu cau chung minh bang code + so lieu (khong chi noi mieng) 4 dieu: edge khong thieu provenance, entity resolution co audit, super-node degree > 100 chi expand toi da 50 canh, va co bang comparison.
-
-### Buoc 5.1 - Kiem tra Super-node policy + Entity audit
-
-- `test_supernode_policy()`: tim node co degree cao nhat trong toan graph, goi `recent_edges` voi limit tuong ung (50 neu degree > `SUPER_NODE_DEGREE`, nguoc lai 1000), roi `assert` so canh lay ve <= 50 khi node do la super-node. Chay ham nay va CHUP LAI/GHI LAI ket qua in ra (ten node, degree, so canh fetch duoc) - day la bang chung nop bai.
-- `show_resolution_audit(entity_resolution_audit_df)`: hien 30 dong co similarity cao nhat, va rieng 20 dong bi `REJECT_GUARD` co similarity cao nhat (nhung cap "nhin giong nhau ma khong duoc merge") - day la bang chung cho thay lexical guard hoat dong dung, rat quan trong de tra loi cau hoi "candidate nao similarity cao nhung khong nen merge".
-
-### Buoc 5.2 - Thuyet minh ky thuat (BAT BUOC, chiem 20% diem)
-
-Tu viet cau tra loi (bang van xuoi, co du lieu/so lieu minh chung, KHONG tra loi chung) cho 10 cau hoi sau va dua vao notebook hoac bao cao nop bai:
-
-1. Coreference resolution sai trong tinh huong nao (vi du cu the tu `unresolved_mentions` hoac loi phat hien duoc)?
-2. Entity resolution threshold ban chon la bao nhieu (0.90 mac dinh hay da doi), vi sao?
-3. Co candidate entity nao similarity cao nhung KHONG nen merge (lay tu bang `REJECT_GUARD`)? Vi sao khong nen merge?
-4. Top 3 super-node trong graph cua ban la gi, degree bao nhieu (lay tu `top_degree_df`)?
-5. Chinh sach uu tien lay canh (edge) moi nhat (`ORDER BY published_date DESC`) co the dung hoac sai trong truong hop nao?
-6. Flat RAG thang (diem cao hon) o nhom cau hoi nao (factoid/multi-hop/cross-doc)?
-7. GraphRAG thang o nhom cau hoi nao?
-8. Trade-off giua latency va token usage giua 2 kien truc la gi (lay so lieu tu comparison_df)?
-9. Neu co dung AI Coding Agent: Agent da de xuat gi ma ban KHONG dung, vi sao?
-10. Voi quy mo du lieu day du 350MB (khong con scale guard), bottleneck (nut co chai) dau tien se la gi (goi y: so luot goi LLM cho extraction, chi phi embedding, hay Neo4j write throughput)?
+Bỏ comment chạy `graph_counts, top_degree_df = graph_checks()` và lưu lại bảng `top_degree_df` để đối chiếu với bước kiểm tra super-node sau này.
 
 ---
 
-## PHAN BONUS (tuy chon, lam sau khi da hoan thanh Phan 1-5)
+## PHẦN 3 - FLAT RAG & HYBRID GRAPHRAG (45-75 phút)
+
+Nguyên tắc so sánh công bằng: cả hai kiến trúc dùng CÙNG một embedding model và CÙNG một generator LLM, chỉ khác nhau về CÁCH RETRIEVE context - để phân tích tập trung vào kiến trúc retrieval, không bị nhiễu bởi model khác nhau.
+
+### Bước 3.1 - Xây Flat RAG baseline
+
+- `build_flat_index(chunks_df)`: encode toàn bộ `chunks_df.text` bằng sentence-transformers (normalize_embeddings=True), đưa vào FAISS `IndexFlatIP` (inner product = cosine trên vector đã normalize).
+- `retrieve_flat_context(query, k=6)`: encode câu hỏi, tìm k chunk gần nhất, trả về context đã ghép chuỗi kèm `chunk_id`, `published_date`, `score` (để trace được provenance) và DataFrame kết quả.
+- Bỏ comment chạy `build_flat_index(chunks_df)`.
+
+### Luồng xử lý của Graph Retrieval (tổng quan trước khi đọc code)
+
+1. LLM trích xuất "seed entities" từ câu hỏi.
+2. Tìm seed đó trong Neo4j (khớp chính xác tên/alias trước), nếu không có thì fallback bằng embedding fuzzy match.
+3. BFS (duyệt theo chiều rộng) từ các seed, tối đa `max_hops` bước.
+4. Nếu một node có degree > 100 (super-node) thì chỉ lấy tối đa 50 cạnh MỚI NHẤT của node đó, không lấy hết.
+5. Có giới hạn tổng số cạnh toàn cục (global edge cap) để tránh "nổ" context (context explosion).
+6. Chuyển subgraph thu được thành text có kèm provenance (ngày, chunk_id, evidence) để đưa vào prompt.
+
+### Bước 3.2 - Seed matching (khớp thực thể hạt giống)
+
+- `extract_seeds(query)`: gọi LLM (`SEED_SYSTEM` yêu cầu KHÔNG trả lời câu hỏi, chỉ trích seed entity thuộc 3 loại Company/Person/Technology) để lấy danh sách tên thực thể tiềm năng từ câu hỏi người dùng.
+- `build_entity_matcher(nodes_df)`: encode trước tên tất cả node trong graph thành vector, lưu vào `entity_match_vectors`/`entity_match_store` để tra cứu nhanh (chạy 1 lần sau khi có `nodes_df`).
+- `match_seeds(query, fuzzy_threshold=0.66)`: với mỗi seed, thử tìm EXACT match trong Neo4j qua `name_norm`/`aliases_norm` trước; nếu không có kết quả mới fallback sang so sánh embedding (cosine) với ngưỡng 0.66 và lấy node có similarity cao nhất.
+- Bỏ comment chạy `build_entity_matcher(nodes_df)` sau khi đã có `nodes_df` từ Phần 2.
+
+### Bước 3.3 - Graph traversal + Super-node mitigation
+
+Các tham số kiểm soát (có thể tinh chỉnh và giải thích trong báo cáo):
+- `SUPER_NODE_DEGREE = 100` - ngưỡng để coi một node là "super-node".
+- `SUPER_NODE_EDGE_CAP = 50` - số cạnh tối đa được lấy từ một super-node.
+- `GLOBAL_EDGE_CAP = 250` - tổng số cạnh tối đa thu thập cho toàn bộ quá trình traversal của 1 câu hỏi.
+- `MAX_GRAPH_CONTEXT_CHARS = 14000` - độ dài tối đa (ký tự) của context dạng text đưa vào prompt.
+
+- `node_degree(node_id)`: đếm số cạnh (kể cả 2 chiều) của một node bằng Cypher.
+- `recent_edges(node_id, limit)`: lấy tối đa `limit` cạnh, SẮP XẾP THEO NGÀY MỚI NHẤT TRƯỚC (ORDER BY published_date DESC) - đây là 1 policy cần được giải thích/đánh giá trong báo cáo (ưu tiên tin mới có thể đúng hoặc sai tùy loại câu hỏi).
+- `textualize(edges)`: chuyển list cạnh thành các dòng text dạng "A [Type] -RELATION-> B [Type] | date=... | chunk=... | evidence=...", cắt bớt khi vượt `MAX_GRAPH_CONTEXT_CHARS`.
+- `retrieve_graph_context(query, max_hops=2, edge_limit=50, return_debug=False)`: dùng hàng đợi (deque) để BFS từ các seed đã match; với mỗi node được "expand" thì kiểm tra degree, nếu vượt `SUPER_NODE_DEGREE` thì giới hạn lại edge_limit về tối đa `SUPER_NODE_EDGE_CAP` (và ghi lại vào `supernode_events` để audit); dừng lại khi đạt `GLOBAL_EDGE_CAP` hoặc hết frontier. Kết quả trả về gồm context đã textualize, DataFrame edges, và diagnostics (seed đã match, số node đã expand, số cạnh thu được, danh sách supernode_events).
+
+### Bước 3.4 - Sinh câu trả lời: Flat vs Hybrid GraphRAG
+
+- `ANSWER_SYSTEM` yêu cầu LLM chỉ trả lời từ context được cung cấp, không bịa đặt, phải trích dẫn provenance dạng `[chunk_id=...]`, và phải nói rõ nếu bằng chứng không đủ/mâu thuẫn.
+- `generate_answer(question, context)`: gọi LLM sinh câu trả lời, đo luôn `latency_s` (thời gian) và `total_tokens` (usage) - hai chỉ số này sẽ dùng cho bảng so sánh Phần 4.
+- `answer_flat_rag(question)`: retrieve 6 chunk gần nhất bằng Flat RAG rồi sinh câu trả lời.
+- `answer_graph_rag(question)`: đây chính là kiến trúc **Hybrid** - lấy cả graph context (`retrieve_graph_context`, max_hops=2) VÀ vector context (4 chunk qua `retrieve_flat_context`), ghép 2 phần context lại ("=== GRAPH ===" và "=== VECTOR ===") rồi mới sinh câu trả lời. Đây là lý do lab gọi là "Hybrid GraphRAG" chứ không phải graph-only.
+
+**Nên làm ngay**: Thử chạy `answer_flat_rag()` và `answer_graph_rag()` với vài câu hỏi mẫu để kiểm tra pipeline chạy end-to-end thông suốt trước khi qua Phần 4 (chạy hàng loạt qua Golden Dataset sẽ tốn thời gian/token, nên debug từng câu trước).
+
+---
+
+## PHẦN 4 - GOLDEN DATASET & LLM-AS-A-JUDGE (75-105 phút)
+
+### Bước 4.1 - Chuẩn bị Golden Dataset
+
+Schema Golden Dataset gồm: `id`, `group` (loại câu hỏi: factoid/multi-hop/cross-doc), `question`, `reference_answer`, và tùy chọn `reference_evidence`.
+
+Notebook có sẵn 5 câu hỏi starter:
+- G01 (factoid) - ĐÃ CÓ reference_answer mẫu.
+- G02 (multi-hop) - "Startup nào được thành lập bởi cựu nhân viên Microsoft và sau đó nhận vốn đầu tư từ Google?" - CHƯA có reference_answer, phải điền.
+- G03 (cross-doc) - So sánh hướng đầu tư AI của Meta và Apple trong 2023 từ nhiều bài báo - CHƯA có reference_answer, phải điền.
+- G04 (multi-hop) - Tìm công ty được đầu tư bởi một công ty công nghệ lớn và cũng phát triển một công nghệ AI cụ thể - CHƯA có reference_answer, phải điền.
+- G05 (cross-doc) - Tìm một công nghệ liên quan cùng một công ty qua ít nhất 2 chunk khác nhau, tóm tắt thay đổi theo thời gian - CHƯA có reference_answer, phải điền.
+
+**Bước bắt buộc, KHÔNG được bỏ qua**: Với 4 câu G02-G05, bạn phải tự tra cứu trong chính dữ liệu `chunks_df`/graph đã nạp (dùng Cypher hoặc tìm kiếm text) để điền `reference_answer` THẬT (đúng với dữ liệu thực tế đã load, không bịa đặt), rồi lưu ra file `golden_dataset.csv` (đường dẫn `GOLDEN_PATH`). Hàm `validate_golden(df, require_answers=True)` sẽ raise lỗi và in ra danh sách câu còn thiếu reference_answer nếu bạn chưa điền đủ - hãy chạy hàm này sớm để biết mình còn thiếu câu nào.
+
+**Gợi ý**: Nếu câu hỏi mẫu (ví dụ G02) không tìm thấy dữ liệu phù hợp trong subset đã lấy mẫu ngẫu nhiên (ví dụ không có công ty nào thỏa điều kiện "từng làm Microsoft rồi được Google đầu tư"), bạn được phép sửa lại nội dung câu hỏi cho phù hợp với dữ liệu thực tế đang có, miễn là vẫn giữ đúng LOẠI câu hỏi (factoid/multi-hop/cross-doc) và giải thích lý do thay đổi trong phần thuyết minh.
+
+### Bước 4.2 - LLM-as-a-Judge
+
+- `JUDGE_SYSTEM`: yêu cầu judge chấm nghiêm khắc trên thang 1-5 cho 3 tiêu chí: `comprehensiveness` (độ đầy đủ), `faithfulness` (độ trung thực với context được cung cấp - không bịa đặt), `multi_hop_reasoning` (độ chính xác của suy luận nhiều bước), dùng reference_answer làm mốc đúng/sai.
+- `judge_json(system, user)`: linh hoạt chọn provider judge qua `JUDGE_PROVIDER` - nếu là "groq" thì dùng lại hàm groq_json, nếu là "openai" thì gọi OpenAI Chat Completions với `response_format=json_object`.
+- `judge_answer(question, reference, answer, context)`: đóng gói prompt judge đầy đủ (câu hỏi, reference, candidate answer, candidate context tối đa 18000 ký tự), ép điểm về khoảng [1,5], trả về dict 3 điểm số + `rationale` (giải trình 2-5 câu).
+**Lưu ý**: judge nên dùng MODEL KHÁC hoặc ít nhất prompt độc lập với model sinh câu trả lời để giảm thiên vị tự-đánh-giá; nếu dùng OpenAI làm judge sẽ tốn chi phí riêng, kiểm tra `OPENAI_API_KEY` trước.
+
+### Bước 4.3 - Chạy Evaluation + checkpoint
+
+Hàm `run_evaluation(golden_df)` lặp qua từng câu trong Golden Dataset, chạy CẢ `answer_flat_rag` VÀ `answer_graph_rag`, chấm điểm CẢ HAI bằng judge, rồi gộp tất cả vào 1 dòng kết quả (bao gồm 3 điểm judge, latency, token, số lượng supernode_events, rationale) và LƯU CHECKPOINT ra CSV sau MỖI LẦN CHẠY XONG (không phải chờ hết mới lưu 1 lần) - để tránh mất toàn bộ kết quả nếu Colab bị disconnect giữa lúc chạy.
+
+Trước khi chạy full: gọi `validate_golden(golden_df, require_answers=True)` để chặn lại nếu còn câu thiếu reference_answer. Sau đó mới bỏ comment chạy `eval_results_df = run_evaluation(golden_df)`. Vì một câu chạy cả 2 kiến trúc + 2 lần judge (4 lời gọi LLM/câu), với 5 câu sẽ tốn khoảng 20 lời gọi LLM - cần dự kiến thời gian chờ.
+
+### Bước 4.4 - Bảng so sánh + export
+
+Hàm `comparison_table(eval_df)` group theo `group` (loại câu hỏi), tính trung bình 5 metric (Comprehensiveness, Faithfulness, Multi-hop reasoning, Latency, Token usage) cho cả Flat RAG và GraphRAG, VÀ TỰ ĐỘNG SINH NHẬN XÉT: với Latency/Token thì Flat RAG rẻ/nhanh hơn là bình thường; với 3 metric chất lượng, nếu GraphRAG hơn >= 0.75 điểm thì ghi nhận "cải thiện rõ", nếu kém hơn <= -0.5 điểm thì ghi "Flat RAG tốt hơn, graph extraction/retrieval có thể gây mất thông tin hoặc nhiễu", còn lại là "hai phương pháp gần nhau".
+
+Bỏ comment chạy `comparison_df = comparison_table(eval_results_df)`, rồi export 2 file bắt buộc: `eval_results_df.to_csv("/content/graphrag_eval_results.csv")` và `comparison_df.to_csv("/content/graphrag_vs_flatrag_summary.csv")`. Đây là 2 file cần nộp kèm notebook.
+
+---
+
+## PHẦN 5 - FAILURE-MODE CHECKS & SUBMISSION (105-120 phút)
+
+Phần này yêu cầu chứng minh bằng code + số liệu (không chỉ nói miệng) 4 điều: edge không thiếu provenance, entity resolution có audit, super-node degree > 100 chỉ expand tối đa 50 cạnh, và có bảng comparison.
+
+### Bước 5.1 - Kiểm tra Super-node policy + Entity audit
+
+- `test_supernode_policy()`: tìm node có degree cao nhất trong toàn graph, gọi `recent_edges` với limit tương ứng (50 nếu degree > `SUPER_NODE_DEGREE`, ngược lại 1000), rồi `assert` số cạnh lấy về <= 50 khi node đó là super-node. Chạy hàm này và CHỤP LẠI/GHI LẠI kết quả in ra (tên node, degree, số cạnh fetch được) - đây là bằng chứng nộp bài.
+- `show_resolution_audit(entity_resolution_audit_df)`: hiện 30 dòng có similarity cao nhất, và riêng 20 dòng bị `REJECT_GUARD` có similarity cao nhất (những cặp "nhìn giống nhau mà không được merge") - đây là bằng chứng cho thấy lexical guard hoạt động đúng, rất quan trọng để trả lời câu hỏi "candidate nào similarity cao nhưng không nên merge".
+
+### Bước 5.2 - Thuyết minh kỹ thuật (BẮT BUỘC, chiếm 20% điểm)
+
+Tự viết câu trả lời (bằng văn xuôi, có dữ liệu/số liệu minh chứng, KHÔNG trả lời chung chung) cho 10 câu hỏi sau và đưa vào notebook hoặc báo cáo nộp bài:
+
+1. Coreference resolution sai trong tình huống nào (ví dụ cụ thể từ `unresolved_mentions` hoặc lỗi phát hiện được)?
+2. Entity resolution threshold bạn chọn là bao nhiêu (0.90 mặc định hay đã đổi), vì sao?
+3. Có candidate entity nào similarity cao nhưng KHÔNG nên merge (lấy từ bảng `REJECT_GUARD`)? Vì sao không nên merge?
+4. Top 3 super-node trong graph của bạn là gì, degree bao nhiêu (lấy từ `top_degree_df`)?
+5. Chính sách ưu tiên lấy cạnh (edge) mới nhất (`ORDER BY published_date DESC`) có thể đúng hoặc sai trong trường hợp nào?
+6. Flat RAG thắng (điểm cao hơn) ở nhóm câu hỏi nào (factoid/multi-hop/cross-doc)?
+7. GraphRAG thắng ở nhóm câu hỏi nào?
+8. Trade-off giữa latency và token usage giữa 2 kiến trúc là gì (lấy số liệu từ comparison_df)?
+9. Nếu có dùng AI Coding Agent: Agent đã đề xuất gì mà bạn KHÔNG dùng, vì sao?
+10. Với quy mô dữ liệu đầy đủ 350MB (không còn scale guard), bottleneck (nút cổ chai) đầu tiên sẽ là gì (gợi ý: số lượt gọi LLM cho extraction, chi phí embedding, hay Neo4j write throughput)?
+
+---
+
+## PHẦN BONUS (tùy chọn, làm sau khi đã hoàn thành Phần 1-5)
 
 ### Bonus A - Low-level / High-level retrieval
 
-Tao thêm tang "high-level": community/topic report (tom tat theo cum entity) ben canh cac "local entity" hien co, roi dung mot query router de chon tang retrieval phu hop (cau hoi cu the -> local; cau hoi tong quan/xu huong -> high-level).
+Tạo thêm tầng "high-level": community/topic report (tóm tắt theo cụm entity) bên cạnh các "local entity" hiện có, rồi dùng một query router để chọn tầng retrieval phù hợp (câu hỏi cụ thể -> local; câu hỏi tổng quan/xu hướng -> high-level).
 
-### Bonus B - Global Search qua Community Reports (fallback bang NetworkX)
+### Bonus B - Global Search qua Community Reports (fallback bằng NetworkX)
 
-Neu Neo4j instance khong co Graph Data Science (GDS) library phu hop, dung fallback: export toan bo edges ra pandas, dung NetworkX `greedy_modularity_communities` de phat hien cum (community detection), viet nguoc `community_id` vao Neo4j bang UNWIND theo batch (ham `build_communities(limit_edges=20000)`), roi dung LLM tom tat noi dung tung community, cuoi cung cho phep query "global" tren cac ban tom tat community nay thay vi tren tung node rieng le.
+Nếu Neo4j instance không có Graph Data Science (GDS) library phù hợp, dùng fallback: export toàn bộ edges ra pandas, dùng NetworkX `greedy_modularity_communities` để phát hiện cụm (community detection), viết ngược `community_id` vào Neo4j bằng UNWIND theo batch (hàm `build_communities(limit_edges=20000)`), rồi dùng LLM tóm tắt nội dung từng community, cuối cùng cho phép query "global" trên các bản tóm tắt community này thay vì trên từng node riêng lẻ.
 
 ### Bonus C - Self-Correction Graph Retrieval
 
-Y tuong: sau khi lay context o hop 2, dung mot LLM kiem tra (`context_sufficient`) xem context da du de tra loi chua; neu thieu thi tang len hop 3; neu van thieu thi fallback sang vector search bo sung. Bat buoc phai co dieu kien dung (stop condition) de tranh vong lap vo han - trong code khung, toi da chi den hop 3 roi bat buoc dung lai va bo sung vector.
+Ý tưởng: sau khi lấy context ở hop 2, dùng một LLM kiểm tra (`context_sufficient`) xem context đã đủ để trả lời chưa; nếu thiếu thì tăng lên hop 3; nếu vẫn thiếu thì fallback sang vector search bổ sung. Bắt buộc phải có điều kiện dừng (stop condition) để tránh vòng lặp vô hạn - trong code khung, tối đa chỉ đến hop 3 rồi bắt buộc dừng lại và bổ sung vector.
 
 ---
 
-## CHECKLIST NOP BAI (rieng cho ban tich khi hoan thanh)
+## CHECKLIST NỘP BÀI (riêng cho bạn tích khi hoàn thành)
 
-- [ ] Neo4j da connect thanh cong (`connect_neo4j()` khong loi)
-- [ ] Da chay dedup/chunking (`chunks_df` co du lieu)
-- [ ] Da spot-check (kiem tra ngau nhien) ket qua coreference resolution
-- [ ] Da co bang audit entity resolution (`entity_resolution_audit_df`)
-- [ ] Da bulk insert node + edge bang UNWIND (khong insert tung dong)
-- [ ] `graph_checks()` cho ket qua 0 canh thieu provenance
-- [ ] Flat RAG da chay va tra loi duoc
-- [ ] Hybrid GraphRAG da chay va tra loi duoc
-- [ ] Da chay `test_supernode_policy()` va co bang chung cap 50 canh
-- [ ] Golden Dataset da co du 5 reference_answer THAT (khong con "TO_BE_FILLED_FROM_DATASET")
-- [ ] Da chay evaluation het toan bo Golden Dataset (co checkpoint CSV)
-- [ ] Da export `graphrag_eval_results.csv` va `graphrag_vs_flatrag_summary.csv`
-- [ ] Da viet day du phan thuyet minh ky thuat (10 cau hoi Phan 5.2)
-- [ ] Neu lam Bonus: co so lieu dinh luong truoc/sau ro rang
-- [ ] Da chuan bi link GitHub/Drive/LMS de nop bai
+- [ ] Neo4j đã connect thành công (`connect_neo4j()` không lỗi)
+- [ ] Đã chạy dedup/chunking (`chunks_df` có dữ liệu)
+- [ ] Đã spot-check (kiểm tra ngẫu nhiên) kết quả coreference resolution
+- [ ] Đã có bảng audit entity resolution (`entity_resolution_audit_df`)
+- [ ] Đã bulk insert node + edge bằng UNWIND (không insert từng dòng)
+- [ ] `graph_checks()` cho kết quả 0 cạnh thiếu provenance
+- [ ] Flat RAG đã chạy và trả lời được
+- [ ] Hybrid GraphRAG đã chạy và trả lời được
+- [ ] Đã chạy `test_supernode_policy()` và có bằng chứng cap 50 cạnh
+- [ ] Golden Dataset đã có đủ 5 reference_answer THẬT (không còn "TO_BE_FILLED_FROM_DATASET")
+- [ ] Đã chạy evaluation hết toàn bộ Golden Dataset (có checkpoint CSV)
+- [ ] Đã export `graphrag_eval_results.csv` và `graphrag_vs_flatrag_summary.csv`
+- [ ] Đã viết đầy đủ phần thuyết minh kỹ thuật (10 câu hỏi Phần 5.2)
+- [ ] Nếu làm Bonus: có số liệu định lượng trước/sau rõ ràng
+- [ ] Đã chuẩn bị link GitHub/Drive/LMS để nộp bài
 
 ---
 
-## RUBRIC CHAM DIEM (tom tat)
+## RUBRIC CHẤM ĐIỂM (tóm tắt)
 
-| Tieu chi | Trong so | Yeu cau |
+| Tiêu chí | Trọng số | Yêu cầu |
 |---|---|---|
-| Chay duoc code | 30% | Graph nap thanh cong, schema dung, xuat duoc bang so sanh |
-| Xu ly Failure modes | 30% | Xu ly duoc it nhat 2/3 van de: Super-node, Entity Resolution, Coreference |
-| Evaluation | 20% | Chay het Golden Dataset, phan tich hop ly |
-| Thuyet minh | 20% | Giai thich duoc kien truc va cach kiem soat AI Coding Agent |
+| Chạy được code | 30% | Graph nạp thành công, schema đúng, xuất được bảng so sánh |
+| Xử lý Failure modes | 30% | Xử lý được ít nhất 2/3 vấn đề: Super-node, Entity Resolution, Coreference |
+| Evaluation | 20% | Chạy hết Golden Dataset, phân tích hợp lý |
+| Thuyết minh | 20% | Giải thích được kiến trúc và cách kiểm soát AI Coding Agent |
 
 ---
 
-## Ghi chu cuoi
+## Ghi chú cuối
 
-Tai lieu nay la ban tong hop huong dan thao tac dua tren noi dung cong khai cua trang codelab (VLearn), nham giup ban di dung tung buoc trong Colab. Toan bo code chi tiet, day du va co the copy-paste truc tiep van nam trong notebook Colab goc cua khoa hoc - hay mo notebook do song song voi file huong dan nay khi thuc hanh. Ban nen doc lai muc "LUU Y QUAN TRONG" o dau file truoc khi bat dau tung phan.
+Tài liệu này là bản tổng hợp hướng dẫn thao tác dựa trên nội dung công khai của trang codelab (VLearn), nhằm giúp bạn đi đúng từng bước trong Colab. Toàn bộ code chi tiết, đầy đủ và có thể copy-paste trực tiếp vẫn nằm trong notebook Colab gốc của khóa học - hãy mở notebook đó song song với file hướng dẫn này khi thực hành. Bạn nên đọc lại mục "LƯU Ý QUAN TRỌNG" ở đầu file trước khi bắt đầu từng phần.
