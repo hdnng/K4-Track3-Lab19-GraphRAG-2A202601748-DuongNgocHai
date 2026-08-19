@@ -28,8 +28,17 @@ SUPER_NODE_EDGE_CAP = 50
 GLOBAL_EDGE_CAP = 250
 MAX_GRAPH_CONTEXT_CHARS = 14000
 
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
-_groq = Groq(api_key=os.environ["GROQ_API_KEY"])
+# Dinh tuyen giong notebook: seed + sinh cau tra loi chay tren OpenAI (Groq free tier
+# gioi han 200k token/ngay cho moi model). Doi GEN_PROVIDER=groq trong .env de dung Groq.
+GROQ_MODEL   = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+GEN_PROVIDER = os.environ.get("GEN_PROVIDER", "openai" if os.environ.get("OPENAI_API_KEY") else "groq")
+GEN_MODEL    = os.environ.get("GEN_MODEL", "gpt-4o-mini" if GEN_PROVIDER == "openai" else GROQ_MODEL)
+
+_groq = Groq(api_key=os.environ["GROQ_API_KEY"]) if os.environ.get("GROQ_API_KEY") else None
+_openai = None
+if os.environ.get("OPENAI_API_KEY"):
+    from openai import OpenAI
+    _openai = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 _driver = GraphDatabase.driver(os.environ["NEO4J_URI"],
                                auth=(os.environ["NEO4J_USER"], os.environ["NEO4J_PASSWORD"]))
 NEO4J_DATABASE = os.environ.get("NEO4J_DATABASE", "neo4j")
@@ -63,13 +72,17 @@ def parse_json_object(text):
 
 
 def groq_chat(messages, json_mode=False, max_retries=4):
+    """Goi LLM sinh cau tra loi / seed theo GEN_PROVIDER."""
     last = None
     for attempt in range(max_retries):
         try:
-            kwargs = {"model": GROQ_MODEL, "messages": messages, "temperature": 0.0}
+            kwargs = {"model": GEN_MODEL, "messages": messages, "temperature": 0.0}
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
-            resp = _groq.chat.completions.create(**kwargs)
+            client = _openai if GEN_PROVIDER == "openai" else _groq
+            if client is None:
+                raise RuntimeError("Thieu API key cho provider " + GEN_PROVIDER)
+            resp = client.chat.completions.create(**kwargs)
             usage = {}
             if getattr(resp, "usage", None):
                 usage = {"total_tokens": resp.usage.total_tokens}

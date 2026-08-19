@@ -160,3 +160,40 @@ Học viên commit và push lên GitHub cá nhân:
 1. `Day19_GraphRAG_vs_FlatRAG_Production_Lab_Guide.ipynb` (Notebook đã chạy đầy đủ output các cell).
 2. `outputs/graphrag_eval_results.csv` và `outputs/graphrag_vs_flatrag_summary.csv`.
 3. `reports/lab_report.md` (Điền đầy đủ 2 phần: Thuyết minh kỹ thuật & Suy ngẫm cá nhân).
+
+---
+
+## ✅ Kết quả bài nộp (đã chạy thực tế)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Phạm vi corpus | 5.000 dòng đầu → 2.114 chunk (khớp scope của Golden Dataset) |
+| Đồ thị Neo4j | **393 node · 271 cạnh · 0 cạnh thiếu provenance** |
+| Golden Dataset | 25 câu (2 factoid · 12 multi-hop · 11 cross-doc) |
+| Multi-hop reasoning | Flat 3.28 → **GraphRAG 4.12** (+0.84) |
+| Evidence recall | Flat 0.77 → **GraphRAG 0.91** |
+| Chi phí | GraphRAG dùng **1.55× token**, latency ngang nhau |
+| Bonus | Community detection · Self-correction · Near-dedup MinHash — đều có số liệu định lượng |
+
+Báo cáo đầy đủ: [`reports/lab_report.md`](reports/lab_report.md) ·
+[`technical_defense.md`](reports/technical_defense.md) ·
+[`failure_analysis.md`](reports/failure_analysis.md) ·
+[`reflection_DuongNgocHai.md`](reports/reflection_DuongNgocHai.md)
+
+---
+
+## 🖥️ Demo UI
+
+```bash
+.\.venv\Scripts\python.exe demo\serve_demo.py    # → http://127.0.0.1:8019
+```
+
+| Tab | Nội dung |
+|---|---|
+| **So sánh 25 câu hỏi** | Chọn câu bất kỳ: câu trả lời của cả hai kiến trúc, điểm judge từng trục, subgraph tuyến tính hoá và top-6 chunk, chunk bằng chứng vàng được tô sáng |
+| **Knowledge Graph** | Subgraph tương tác (kéo/zoom/chọn node), kích thước node theo degree, bảng top-degree |
+| **Entity Resolution** | Thí nghiệm độ nhạy ngưỡng, probe Lexical Guard, audit đầy đủ 23 dòng |
+| **Failure modes & Bonus** | Bảng benchmark, bằng chứng super-node cap, kết quả 3 bonus |
+| **Hỏi trực tiếp** | Gõ câu hỏi mới → chạy **thật** Neo4j + LLM, trả về cả hai câu trả lời kèm trace retrieval |
+
+Tab đầu đọc `outputs/demo_data.json` (tĩnh, không gọi API). Tab cuối cần `.env` và graph đã được nạp.

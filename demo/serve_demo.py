@@ -81,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
                 n = lib.run_cypher("MATCH (n:Entity) RETURN count(n) AS n")[0]["n"]
                 e = lib.run_cypher("MATCH ()-[r]->() RETURN count(r) AS n")[0]["n"]
                 return self._send(200, json.dumps({"live": True, "nodes": n, "edges": e,
-                                                   "model": lib.GROQ_MODEL}))
+                                                   "model": f"{lib.GEN_PROVIDER}/{lib.GEN_MODEL}"}))
             except Exception as ex:
                 return self._send(200, json.dumps({"live": False, "reason": str(ex)[:300]}))
 
