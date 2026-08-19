@@ -197,3 +197,11 @@ Báo cáo đầy đủ: [`reports/lab_report.md`](reports/lab_report.md) ·
 | **Hỏi trực tiếp** | Gõ câu hỏi mới → chạy **thật** Neo4j + LLM, trả về cả hai câu trả lời kèm trace retrieval |
 
 Tab đầu đọc `outputs/demo_data.json` (tĩnh, không gọi API). Tab cuối cần `.env` và graph đã được nạp.
+
+---
+
+## 📖 Tài liệu giải thích chi tiết
+
+[`reports/lab19-explainer.html`](reports/lab19-explainer.html) — trang giải thích toàn bộ bài lab:
+bối cảnh vì sao Flat RAG hụt hơi, sơ đồ luồng end-to-end, 10 khái niệm nền tảng, phân tích từng module,
+bảng benchmark và mổ xẻ 3 ca lỗi theo nguyên nhân gốc rễ. Mở trực tiếp bằng trình duyệt.

@@ -1,0 +1,774 @@
+<meta charset="utf-8">
+<title>Mổ xẻ GraphRAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --ground:#eef0f3; --surface:#ffffff; --surface-2:#f5f7f9; --line:#d8dde4;
+  --ink:#171a1f; --ink-2:#4d5665; --ink-3:#78818f;
+  --graph:#0b7a75; --graph-soft:#dcedeb; --flat:#b25139; --flat-soft:#f7e4de;
+  --person:#6a44a3; --tech:#a9640f; --good:#1c7a4b; --crit:#a92e21;
+  --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --shadow:0 1px 2px rgba(20,24,31,.05),0 10px 30px -22px rgba(20,24,31,.5);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0f1216; --surface:#161a20; --surface-2:#1c212a; --line:#2a313b;
+    --ink:#e6e9ee; --ink-2:#aab3c0; --ink-3:#7d8797;
+    --graph:#3ac6b6; --graph-soft:#123634; --flat:#e2825f; --flat-soft:#3a2018;
+    --person:#a98cf0; --tech:#dfa249; --good:#4cbd82; --crit:#e2705f;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 34px -24px rgba(0,0,0,1);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0f1216; --surface:#161a20; --surface-2:#1c212a; --line:#2a313b;
+  --ink:#e6e9ee; --ink-2:#aab3c0; --ink-3:#7d8797;
+  --graph:#3ac6b6; --graph-soft:#123634; --flat:#e2825f; --flat-soft:#3a2018;
+  --person:#a98cf0; --tech:#dfa249; --good:#4cbd82; --crit:#e2705f;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 34px -24px rgba(0,0,0,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:var(--serif);font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+h1,h2,h3,h4{font-family:var(--display);text-wrap:balance;margin:0}
+p{margin:0 0 1em}
+a{color:var(--graph)}
+code,.mono{font-family:var(--mono);font-size:.86em;font-variant-numeric:tabular-nums}
+p code,li code,td code{background:var(--surface-2);border:1px solid var(--line);
+  border-radius:4px;padding:.05em .35em}
+
+/* hero */
+.hero{background:var(--surface);border-bottom:1px solid var(--line)}
+.hero-in{max-width:1180px;margin:0 auto;padding:56px 24px 40px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--graph);margin-bottom:14px}
+h1{font-size:clamp(34px,5.4vw,58px);font-weight:800;line-height:1.04;letter-spacing:-.025em;max-width:16ch}
+.lede{font-size:20px;color:var(--ink-2);max-width:60ch;margin-top:18px}
+.metas{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.meta{font-family:var(--mono);font-size:12px;color:var(--ink-2);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+.meta b{color:var(--ink);font-weight:500}
+
+/* layout */
+.cols{display:grid;grid-template-columns:214px minmax(0,1fr);gap:40px;padding:44px 0 80px}
+@media (max-width:1000px){.cols{grid-template-columns:1fr;gap:0}nav.toc{display:none}}
+nav.toc{position:sticky;top:24px;align-self:start;font-family:var(--display);font-size:13px}
+nav.toc a{display:block;color:var(--ink-3);text-decoration:none;padding:5px 0 5px 12px;
+  border-left:2px solid var(--line)}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);border-left-color:var(--graph)}
+nav.toc .lv2{padding-left:24px;font-size:12.5px}
+article{min-width:0;max-width:none}
+/* Giữ dòng chữ ~72ch để dễ đọc, nhưng để bảng/sơ đồ dùng hết chiều rộng cột. */
+article > section > p,
+article > section > ol,
+article > section > ul,
+article > section > blockquote,
+article > section > .callout,
+article > section > h3 + p{max-width:72ch}
+section{margin-bottom:56px;scroll-margin-top:24px}
+h2{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px}
+h2 .num{font-family:var(--mono);font-size:13px;color:var(--graph);display:block;
+  letter-spacing:.14em;margin-bottom:6px;font-weight:400}
+h3{font-size:20px;font-weight:600;margin:30px 0 8px}
+h4{font-size:15px;font-weight:600;margin:20px 0 6px;font-family:var(--serif)}
+.section-lede{color:var(--ink-2);font-size:18px;margin-bottom:22px}
+
+/* blocks */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:20px 22px;margin:20px 0;box-shadow:var(--shadow)}
+.card h3{margin-top:0}
+.grid{display:grid;gap:14px}
+.grid.two{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.term{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.term h4{font-family:var(--display);font-size:15px;margin:0 0 4px;letter-spacing:-.01em}
+.term p{font-size:15px;color:var(--ink-2);margin:0}
+.term .tag{font-family:var(--mono);font-size:11px;color:var(--graph);letter-spacing:.08em;
+  text-transform:uppercase;display:block;margin-bottom:6px}
+pre{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.55;margin:14px 0}
+pre .c{color:var(--ink-3)}
+pre .k{color:var(--graph)}
+blockquote{margin:18px 0;padding:2px 0 2px 18px;border-left:3px solid var(--graph);
+  color:var(--ink-2);font-size:16px}
+.callout{border-left:3px solid var(--flat);background:var(--flat-soft);border-radius:0 10px 10px 0;
+  padding:14px 18px;margin:18px 0;font-size:16px}
+.callout b{color:var(--ink)}
+:root[data-theme="dark"] .callout,
+:root:not([data-theme="light"]) .callout{background:var(--flat-soft)}
+.tw{overflow-x:auto;margin:18px 0}
+table{border-collapse:collapse;width:100%;font-family:var(--display);font-size:14px}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+td.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+td.g{color:var(--graph);font-weight:600} td.f{color:var(--flat);font-weight:600}
+ul,ol{padding-left:22px;margin:0 0 1em}
+li{margin-bottom:.4em}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:22px 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat .v{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--ink-3);font-family:var(--mono);letter-spacing:.04em}
+figure{margin:24px 0}
+figcaption{font-size:13.5px;color:var(--ink-3);margin-top:10px;font-family:var(--display)}
+svg{display:block;max-width:100%;height:auto}
+.legend-inline{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;
+  color:var(--ink-2);margin-top:10px}
+.legend-inline i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
+footer{border-top:1px solid var(--line);background:var(--surface);padding:28px 0;font-size:14px;
+  color:var(--ink-3);font-family:var(--display)}
+</style>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="eyebrow">Lab 19 · Track 3 · AICB-K34</div>
+    <h1>Khi vector search hết chỗ dựa</h1>
+    <p class="lede">Cùng một kho tin công nghệ, hai kiến trúc truy hồi. Flat RAG tìm đoạn văn giống câu hỏi;
+      GraphRAG đi trên các cạnh của đồ thị tri thức để nối những sự kiện nằm ở hai bài báo khác nhau.
+      Tài liệu này mổ xẻ toàn bộ đường ống — từ dòng dữ liệu thô đến điểm chấm của LLM giám khảo.</p>
+    <div class="metas">
+      <span class="meta">Dataset <b>HackerNoon · 5.000 dòng đầu</b></span>
+      <span class="meta">Corpus <b>2,114 chunk</b></span>
+      <span class="meta">Đồ thị <b>393 node · 271 cạnh</b></span>
+      <span class="meta">Golden set <b>25 câu</b></span>
+      <span class="meta">Chạy ngày <b>2026-08-19</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap cols">
+<nav class="toc">
+  <a href="#van-de">Vấn đề</a>
+  <a href="#luong">Luồng hoạt động</a>
+  <a href="#kien-thuc">Kiến thức nền</a>
+  <a href="#m1" class="lv2">M1 · Tiền xử lý</a>
+  <a href="#m2" class="lv2">M2 · Trích xuất</a>
+  <a href="#m3" class="lv2">M3 · Entity Resolution</a>
+  <a href="#m4" class="lv2">M4 · Truy hồi</a>
+  <a href="#m5" class="lv2">M5 · Đánh giá</a>
+  <a href="#ket-qua">Kết quả</a>
+  <a href="#that-bai">Ca lỗi</a>
+  <a href="#failure">Cơ chế phòng vệ</a>
+  <a href="#bonus">Bonus</a>
+  <a href="#chay">Chạy lại &amp; demo</a>
+</nav>
+
+<article>
+
+<section id="van-de">
+  <h2><span class="num">01 — Bối cảnh</span>Vì sao Flat RAG hụt hơi</h2>
+  <p class="section-lede">Flat RAG chỉ biết một phép đo duy nhất: câu hỏi giống đoạn văn nào nhất.
+    Điều đó đủ cho câu hỏi tra cứu, nhưng gãy ở hai loại câu hỏi rất phổ biến trong tin tức.</p>
+
+  <p>Một hệ Flat RAG (hay <em>vector RAG</em>) chia tài liệu thành chunk, mã hoá mỗi chunk thành một vector,
+    rồi khi có câu hỏi thì lấy <code>top-k</code> chunk có cosine similarity cao nhất. Toàn bộ "suy luận"
+    nằm ở chỗ: <b>hy vọng k đoạn văn đó chứa đủ dữ kiện</b>.</p>
+
+  <div class="grid two">
+    <div class="term">
+      <span class="tag">Điểm gãy 1</span>
+      <h4>Multi-hop</h4>
+      <p>“Công ty nào được X đầu tư và sau đó phát triển công nghệ Y?” — dữ kiện chặng 1 nằm ở bài báo A,
+        chặng 2 ở bài báo B. Không chunk nào chứa cả hai, nên cosine không bao giờ xếp đủ cả hai lên top-k.</p>
+    </div>
+    <div class="term">
+      <span class="tag">Điểm gãy 2</span>
+      <h4>Cross-document</h4>
+      <p>“So sánh động thái của Meta và Apple trong 2023” — cần hợp nhất nhiều bài, xử lý trùng lặp
+        (Reuters và bản đăng lại), và giữ trục thời gian. Top-k chunk rời rạc không có cấu trúc để làm việc đó.</p>
+    </div>
+  </div>
+
+  <p>GraphRAG thay đổi <b>hình dạng của ngữ cảnh</b>: thay vì đưa cho LLM vài đoạn văn, ta đưa cho nó
+    một đồ thị đã được chuẩn hoá — thực thể là node, quan hệ là cạnh, và mỗi cạnh mang theo nguồn gốc
+    (<code>source_chunk_id</code>, <code>published_date</code>, <code>evidence</code>). Nối hai chặng suy luận
+    trở thành phép duyệt đồ thị, không còn là phép may rủi của cosine.</p>
+
+  <blockquote>Câu hỏi trung tâm của lab: <b>ngữ cảnh dạng đồ thị có thực sự trả lời tốt hơn ngữ cảnh dạng
+    đoạn văn không, và trả giá bằng gì?</b></blockquote>
+</section>
+
+<section id="luong">
+  <h2><span class="num">02 — Tổng quan</span>Luồng hoạt động end-to-end</h2>
+  <p class="section-lede">Một corpus duy nhất tách thành hai nhánh xử lý, rồi gặp lại nhau ở bàn cân đánh giá.</p>
+
+  
+<figure>
+<svg viewBox="0 0 980 430" role="img" aria-label="So do luong xu ly GraphRAG vs Flat RAG">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)"/>
+    </marker>
+    <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--graph)"/>
+    </marker>
+    <marker id="arf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--flat)"/>
+    </marker>
+  </defs>
+  <style>
+    .bx{fill:var(--surface);stroke:var(--line)}
+    .t{font-family:var(--display);font-size:13px;font-weight:600;fill:var(--ink)}
+    .s{font-family:var(--mono);font-size:10.5px;fill:var(--ink-3)}
+    .lbl{font-family:var(--mono);font-size:10px;fill:var(--ink-3);letter-spacing:.08em}
+  </style>
+
+  <!-- ingest -->
+  <rect class="bx" x="8" y="176" width="150" height="66" rx="9"/>
+  <text class="t" x="24" y="203">Stream HackerNoon</text>
+  <text class="s" x="24" y="221">5.000 dòng đầu</text>
+
+  <rect class="bx" x="176" y="176" width="150" height="66" rx="9"/>
+  <text class="t" x="192" y="203">Dedup + chunk</text>
+  <text class="s" x="192" y="221">2,114 chunk</text>
+
+  <line x1="158" y1="209" x2="172" y2="209" stroke="var(--ink-3)" marker-end="url(#ar)"/>
+
+  <!-- split -->
+  <path d="M326 209 L352 209 L352 96 L376 96" fill="none" stroke="var(--flat)" marker-end="url(#arf)"/>
+  <path d="M326 209 L352 209 L352 300 L376 300" fill="none" stroke="var(--graph)" marker-end="url(#arg)"/>
+
+  <!-- flat branch -->
+  <rect class="bx" x="380" y="62" width="176" height="68" rx="9" stroke="var(--flat)"/>
+  <text class="lbl" x="396" y="82" fill="var(--flat)">FLAT RAG</text>
+  <text class="t" x="396" y="100">FAISS IndexFlatIP</text>
+  <text class="s" x="396" y="118">MiniLM-L6 · top-k = 6</text>
+
+  <!-- graph branch -->
+  <rect class="bx" x="380" y="266" width="176" height="68" rx="9" stroke="var(--graph)"/>
+  <text class="lbl" x="396" y="286" fill="var(--graph)">GRAPHRAG · M2</text>
+  <text class="t" x="396" y="304">Coref → NER + RE</text>
+  <text class="s" x="396" y="322">400 chunk → 271 triple</text>
+
+  <rect class="bx" x="380" y="348" width="176" height="66" rx="9" stroke="var(--graph)"/>
+  <text class="lbl" x="396" y="368" fill="var(--graph)">M3</text>
+  <text class="t" x="396" y="386">Entity Resolution</text>
+  <text class="s" x="396" y="404">ANN + guard + union-find</text>
+  <line x1="468" y1="334" x2="468" y2="344" stroke="var(--graph)" marker-end="url(#arg)"/>
+
+  <rect class="bx" x="596" y="266" width="176" height="68" rx="9" stroke="var(--graph)"/>
+  <text class="lbl" x="612" y="286" fill="var(--graph)">NEO4J</text>
+  <text class="t" x="612" y="304">UNWIND bulk insert</text>
+  <text class="s" x="612" y="322">393 node · 271 cạnh</text>
+  <path d="M556 381 L576 381 L576 300 L592 300" fill="none" stroke="var(--graph)" marker-end="url(#arg)"/>
+
+  <rect class="bx" x="596" y="176" width="176" height="68" rx="9" stroke="var(--graph)"/>
+  <text class="lbl" x="612" y="196" fill="var(--graph)">M4</text>
+  <text class="t" x="612" y="214">Seed → BFS 2 hop</text>
+  <text class="s" x="612" y="232">cap 50/node · 250 toàn cục</text>
+  <line x1="684" y1="262" x2="684" y2="250" stroke="var(--graph)" marker-end="url(#arg)"/>
+
+  <!-- merge -->
+  <rect class="bx" x="812" y="120" width="160" height="82" rx="9"/>
+  <text class="t" x="828" y="148">Sinh câu trả lời</text>
+  <text class="s" x="828" y="166">GRAPH + VECTOR</text>
+  <text class="s" x="828" y="182">có trích dẫn chunk</text>
+  <path d="M556 96 L680 96 L680 150 L806 150" fill="none" stroke="var(--flat)" marker-end="url(#arf)"/>
+  <line x1="772" y1="200" x2="806" y2="176" stroke="var(--graph)" marker-end="url(#arg)"/>
+
+  <rect class="bx" x="812" y="238" width="160" height="82" rx="9"/>
+  <text class="t" x="828" y="266">LLM-as-a-Judge</text>
+  <text class="s" x="828" y="284">3 trục × 1–5</text>
+  <text class="s" x="828" y="300">+ evidence recall</text>
+  <line x1="892" y1="206" x2="892" y2="232" stroke="var(--ink-3)" marker-end="url(#ar)"/>
+</svg>
+<figcaption>Nhánh trên (cam) là Flat RAG: chỉ có embedding và FAISS. Nhánh dưới (xanh) là GraphRAG:
+  tốn thêm 3 bước LLM/đồ thị trước khi truy hồi. Cả hai dùng chung một generator nên bảng so sánh
+  đo đúng phần ngữ cảnh, không đo khác biệt model.</figcaption>
+<div class="legend-inline">
+  <span><i style="background:var(--flat)"></i>đường đi của Flat RAG</span>
+  <span><i style="background:var(--graph)"></i>đường đi của GraphRAG</span>
+</div>
+</figure>
+
+
+  <div class="stat-row">
+    <div class="stat"><div class="v">5,000</div><div class="l">dòng thô</div></div>
+    <div class="stat"><div class="v">2,114</div><div class="l">bài sau dedup</div></div>
+    <div class="stat"><div class="v">400</div><div class="l">chunk trích xuất</div></div>
+    <div class="stat"><div class="v">271</div><div class="l">triple</div></div>
+    <div class="stat"><div class="v">393</div><div class="l">node</div></div>
+    <div class="stat"><div class="v">271</div><div class="l">cạnh</div></div>
+  </div>
+
+  <p>Điểm quan trọng để đọc đúng bảng kết quả: <b>Flat RAG được index toàn bộ 2,114 chunk</b>,
+    trong khi <b>đồ thị chỉ được xây từ 400 chunk</b> (ngân sách trích xuất của lab).
+    Nghĩa là GraphRAG chơi với lượng dữ liệu ít hơn nhiều — và nhánh hybrid vẫn giữ vector context
+    để không mất phần thông tin chưa được đưa vào đồ thị.</p>
+</section>
+
+<section id="kien-thuc">
+  <h2><span class="num">03 — Nền tảng</span>Mười khái niệm cần nắm</h2>
+  <p class="section-lede">Mỗi khái niệm đi kèm chỗ nó xuất hiện trong notebook, để đọc code không bị lạc.</p>
+
+  <div class="grid two">
+    <div class="term"><span class="tag">M1</span><h4>Chunking</h4>
+      <p>Cắt văn bản thành cửa sổ trượt 220 từ, chồng lấn 40 từ. Chồng lấn tránh cắt đứt một câu chứa
+        quan hệ. Với dataset này mỗi bài chỉ là snippet ~42 từ nên ra đúng 1 chunk/bài.</p></div>
+
+    <div class="term"><span class="tag">M1</span><h4>Exact dedup bằng SHA-1</h4>
+      <p>Băm <code>title + text</code> đã chuẩn hoá; trùng hash thì bỏ. Chặn được bản sao byte-identical,
+        không chặn được bài viết lại (xem MinHash ở phần Bonus).</p></div>
+
+    <div class="term"><span class="tag">M1</span><h4>Coreference resolution</h4>
+      <p>Thay đại từ (<code>it</code>, <code>they</code>, <code>the company</code>) bằng tên thực thể thật,
+        và <b>chỉ khi</b> tiền ngữ nằm ngay trong chunk. Nếu mơ hồ thì giữ nguyên và ghi vào
+        <code>unresolved_mentions</code> — thà thiếu còn hơn tạo cạnh sai.</p></div>
+
+    <div class="term"><span class="tag">M2</span><h4>NER + RE với schema allowlist</h4>
+      <p>LLM trả JSON nghiêm ngặt; chỉ 3 loại node (<code>Company/Person/Technology</code>) và 8 loại quan hệ
+        được chấp nhận. Mọi thứ ngoài allowlist bị loại ở tầng code, không tin lời model.</p></div>
+
+    <div class="term"><span class="tag">M2</span><h4>Edge provenance</h4>
+      <p>Mỗi cạnh bắt buộc mang <code>source_chunk_id</code>, <code>published_date</code>,
+        <code>evidence</code>, <code>confidence</code>. Không có provenance thì câu trả lời không kiểm chứng
+        được, và cắt tỉa theo thời gian cũng vô nghĩa.</p></div>
+
+    <div class="term"><span class="tag">M2</span><h4>Bulk insert bằng UNWIND</h4>
+      <p>Gửi 1 câu Cypher cho 1.000 bản ghi thay vì 1.000 round-trip. Kèm unique constraint trên
+        <code>Entity.id</code> để <code>MERGE</code> idempotent.</p></div>
+
+    <div class="term"><span class="tag">M3</span><h4>Entity resolution 3 tầng</h4>
+      <p>Alias thủ công → tìm ứng viên bằng vector ANN (cosine ≥ 0.90) → <b>Lexical Guard</b> bỏ hậu tố
+        <code>Inc/Corp</code> và đòi <code>SequenceMatcher ≥ 0.72</code>. Cụm cuối gộp bằng Union-Find.</p></div>
+
+    <div class="term"><span class="tag">M4</span><h4>BFS + super-node mitigation</h4>
+      <p>Từ seed, lan 2 hop. Node bậc &gt; 100 chỉ lấy 50 cạnh <code>published_date</code> mới nhất;
+        toàn truy vấn trần 250 cạnh và 14.000 ký tự context.</p></div>
+
+    <div class="term"><span class="tag">M4</span><h4>Linearize subgraph</h4>
+      <p>Biến cạnh thành dòng văn bản có trích dẫn:
+        <code>A [Company] -ACQUIRED-&gt; B [Company] | date=… | chunk=… | evidence=…</code>
+        LLM đọc được, người chấm cũng truy vết được.</p></div>
+
+    <div class="term"><span class="tag">M5</span><h4>LLM-as-a-Judge + Evidence Recall</h4>
+      <p>Judge chấm 1–5 trên 3 trục (đầy đủ / trung thực / suy luận nhiều chặng). Song song đó là một
+        chỉ số <b>khách quan</b>: hệ thống có lấy đúng chunk bằng chứng vàng không.</p></div>
+  </div>
+</section>
+
+
+<section id="m1">
+  <h2><span class="num">04 — Module 1</span>Tiền xử lý: chỗ dữ liệu thật cãi lại đề bài</h2>
+  <p class="section-lede">Code khung giả định dataset có cột <code>text</code> chứa nguyên bài báo.
+    Thực tế thì không — và toàn bộ thiết kế phía sau phải điều chỉnh theo.</p>
+
+  <p>Ba phát hiện khi khảo sát dataset (8.079.363 dòng, sắp xếp theo <code>companyName</code>):</p>
+  <ol>
+    <li><b>Không có cột <code>text</code></b> — nội dung nằm ở <code>title</code> + <code>description</code>,
+      nên phải ghép hai cột trước khi gọi <code>standardize_news()</code>.</li>
+    <li><b>“Bài báo” chỉ là snippet</b> (~42 từ). Với <code>CHUNK_WORDS = 220</code>, mỗi bài ra đúng 1 chunk.
+      Hệ quả: <b>không có multi-hop trong nội bộ một tài liệu</b> — mọi chuỗi suy luận buộc phải nối
+      giữa các bài báo, đúng chỗ Flat RAG yếu nhất.</li>
+    <li><b>2,313 dòng có <code>description</code> rỗng hoặc quá ngắn</b>
+      (lỗi quoting ở nguồn), bị loại bằng ngưỡng 120 ký tự.</li>
+  </ol>
+
+  <p>Chọn phạm vi corpus là <b>5.000 dòng đầu</b> không phải chuyện tuỳ tiện: bộ Golden Dataset 25 câu
+    được xây trên đúng phạm vi này và trỏ tới chỉ số dòng gốc, nên <code>article_id = row&lt;row_id&gt;</code>
+    cho phép kiểm chứng provenance tới từng dòng dữ liệu và tính được Evidence Recall.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Bước</th><th>Còn lại</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td>Dòng thô</td><td class="n">5,000</td><td>5.000 dòng đầu của dataset</td></tr>
+      <tr><td>Sau lọc snippet &lt; 120 ký tự</td><td class="n">2,687</td><td>bỏ dòng rỗng/hỏng</td></tr>
+      <tr><td>Sau exact dedup (SHA-1)</td><td class="n">2,114</td><td>bản sao byte-identical</td></tr>
+      <tr><td>Chunk cho Flat RAG</td><td class="n">2,114</td><td>tỉ lệ 1 chunk/bài</td></tr>
+      <tr><td>Near-dup còn sót (MinHash)</td><td class="n">24</td><td>tin syndicated viết lại</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Coreference có cổng chặn</h3>
+  <p>Gọi LLM cho cả 400 chunk là lãng phí: phần lớn snippet tin tức đã nêu tên đầy đủ.
+    Một regex rẻ tiền lọc trước, chỉ chunk có đại từ mới đi tiếp:</p>
+<pre><span class="c"># chỉ chunk có đại từ / tham chiếu chung mới tốn một lượt LLM</span>
+PRONOUN_RE = re.compile(r"\b(it|its|they|them|their|he|she|her|"
+                        r"the company|the startup|the firm|the deal|"
+                        r"the platform|the technology)\b", re.I)
+
+gated  = chunks[chunks.text.map(needs_coref)]   <span class="c"># → gọi LLM</span>
+skipped = chunks[~chunks.chunk_id.isin(gated.chunk_id)]  <span class="c"># → giữ nguyên văn</span></pre>
+  <p>Kết quả trên lần chạy này: <b>114/400 chunk bị coref sửa</b>.
+    Prompt được viết theo hướng bảo thủ — mơ hồ thì <em>không</em> đoán, mà ghi vào
+    <code>unresolved_mentions</code>, vì một lần phân giải sai sẽ đẻ ra cạnh sai và cạnh sai thì lan
+    sang mọi câu trả lời multi-hop về sau.</p>
+</section>
+
+<section id="m2">
+  <h2><span class="num">05 — Module 2</span>Trích xuất tri thức và nạp vào Neo4j</h2>
+  <p class="section-lede">Đây là bước biến văn xuôi thành cấu trúc. Nguyên tắc: <b>không tin lời model</b> —
+    mọi thứ model trả về đều bị kiểm tra lại bằng code.</p>
+
+  <p>LLM được yêu cầu trả JSON nghiêm ngặt, nhưng schema thật sự được cưỡng chế ở tầng Python:</p>
+<pre>ALLOWED_NODE_TYPES = {"Company", "Person", "Technology"}
+ALLOWED_RELATIONS  = {"ACQUIRED", "DEVELOPED", "INVESTED_IN", "FOUNDED",
+                      "WORKED_AT", "PARTNERED_WITH", "USES", "LEADS"}
+
+<span class="c"># mọi phần tử sai schema chỉ bị bỏ qua, không làm chết cả batch</span>
+if not isinstance(item, dict):            violations += 1; continue
+if st not in ALLOWED_NODE_TYPES:          violations += 1; continue
+if rel not in ALLOWED_RELATIONS:          violations += 1; continue</pre>
+
+  <p>Lần chạy này thu được <b>271 triple thô</b> từ 400 chunk,
+    phân bố quan hệ: PARTNERED_WITH 68 · DEVELOPED 64 · USES 53 · ACQUIRED 42 · INVESTED_IN 14 · WORKED_AT 12 · FOUNDED 11 · LEADS 7. Node theo loại: Company 257 · Technology 107 · Person 29.</p>
+
+  <h3>Provenance là bắt buộc, không phải tuỳ chọn</h3>
+  <p>Mỗi cạnh mang 4 thuộc tính. Thiếu bất kỳ cái nào thì cạnh đó vô dụng cho việc kiểm chứng
+    và cho chính sách cắt tỉa theo thời gian:</p>
+<pre>MERGE (s)-[r:{REL} {source_chunk_id: row.source_chunk_id}]-&gt;(t)
+SET r.published_date = row.published_date,
+    r.evidence       = row.evidence,
+    r.confidence     = row.confidence</pre>
+  <p><code>source_chunk_id</code> nằm trong mệnh đề <code>MERGE</code> chứ không phải <code>SET</code>:
+    cùng một quan hệ được hai bài báo khác nhau khẳng định sẽ tạo <b>hai cạnh</b> — đó chính là tín hiệu
+    cross-document mà ta cần giữ, không được gộp mất.</p>
+
+  <h3>Nạp theo lô, không nạp từng dòng</h3>
+<pre>UNWIND $rows AS row          <span class="c"># 1 round-trip cho 1.000 bản ghi</span>
+MERGE (n:Entity {id: row.id})
+SET n:Company, n.name = row.name, n.aliases_norm = row.aliases_norm</pre>
+  <p>Kèm <code>CREATE CONSTRAINT entity_id ... REQUIRE n.id IS UNIQUE</code> để <code>MERGE</code> vừa
+    idempotent vừa có index tra cứu. Kiểm tra sau khi nạp:
+    <b>0 cạnh thiếu provenance</b> trên tổng 271 cạnh.</p>
+</section>
+
+<section id="m3">
+  <h2><span class="num">06 — Module 3</span>Entity Resolution: gộp đúng, và biết khi nào đừng gộp</h2>
+  <p class="section-lede">Tin công nghệ gọi cùng một công ty bằng năm cái tên. Gộp thiếu thì đồ thị vỡ vụn;
+    gộp thừa thì tạo ra sự thật giả.</p>
+
+  <p>Ba tầng nối tiếp nhau, mỗi tầng có quyền phủ quyết tầng trước:</p>
+  <ol>
+    <li><b>Alias thủ công</b> — <code>msft → Microsoft</code>, <code>hpe → Hewlett Packard Enterprise</code>.
+      Rẻ, chắc chắn, dùng cho ticker và tên viết tắt phổ biến.</li>
+    <li><b>Vector ANN</b> — encode tên thực thể bằng MiniLM, tìm láng giềng cosine ≥ 0.90 bằng FAISS.
+      Bắt được biến thể chính tả mà rule không lường trước.</li>
+    <li><b>Lexical Guard</b> — bỏ hậu tố <code>Inc/Corp/Ltd</code> rồi đòi
+      <code>SequenceMatcher ≥ 0.72</code>. Đây là tầng nói “không”: vector rất dễ cho
+      <em>Apple</em> và <em>Apple Watch</em> điểm cao vì chúng cùng ngữ cảnh ngữ nghĩa.</li>
+  </ol>
+  <p>Các cặp sống sót được gộp bằng <b>Union-Find</b> (disjoint-set), rồi mỗi cụm chọn một tên đại diện
+    theo tần suất xuất hiện. Toàn bộ quyết định ghi vào bảng audit
+    (<b>23 dòng</b>) với nhãn <code>MERGE_MANUAL</code> / <code>MERGE_VECTOR</code> /
+    <code>REJECT_GUARD</code>.</p>
+
+  <h3>Vì sao ngưỡng 0.90 chứ không phải 0.85</h3>
+  <p>Không chọn theo cảm tính — chạy quét ngưỡng và đọc hệ quả:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Ngưỡng cosine</th><th>Cặp được gộp</th><th>Bị guard chặn</th><th>Entity canonical còn lại</th></tr></thead>
+    <tbody><tr><td class='n'>0.80</td><td class='n'>7</td><td class='n'>2</td><td class='n'>387</td></tr><tr><td class='n'>0.85</td><td class='n'>5</td><td class='n'>1</td><td class='n'>389</td></tr><tr><td class='n'>0.90</td><td class='n'>3</td><td class='n'>0</td><td class='n'>391</td></tr><tr><td class='n'>0.95</td><td class='n'>1</td><td class='n'>0</td><td class='n'>393</td></tr></tbody>
+  </table></div>
+  <p>Hạ ngưỡng làm số cụm giảm (gộp nhiều hơn) nhưng rủi ro false merge tăng, mà false merge là loại lỗi
+    <em>không thể phát hiện từ câu trả lời cuối</em>: nó chỉ hiện ra khi ai đó truy ngược provenance.</p>
+</section>
+
+<section id="m4">
+  <h2><span class="num">07 — Module 4</span>Hai kiến trúc truy hồi</h2>
+
+  <h3>Flat RAG — đường thẳng</h3>
+<pre>vecs = embedder.encode(chunks.text, normalize_embeddings=True)
+index = faiss.IndexFlatIP(384)      <span class="c"># inner product trên vector đã chuẩn hoá = cosine</span>
+index.add(vecs)
+scores, ids = index.search(query_vec, k=6)</pre>
+  <p><code>IndexFlatIP</code> là quét toàn bộ, chính xác tuyệt đối, O(N) mỗi truy vấn — hoàn toàn ổn ở
+    2,114 vector. Ở quy mô triệu vector thì phải đổi sang HNSW/IVF và chấp nhận xấp xỉ.</p>
+
+  <h3>GraphRAG — bốn bước</h3>
+  <ol>
+    <li><b>Seed extraction</b>: LLM rút thực thể hạt nhân từ câu hỏi.</li>
+    <li><b>Seed resolution 3 tầng</b>: khớp chính xác trên <code>name_norm</code>/<code>aliases_norm</code>
+      → khớp từ vựng (<code>CONTAINS</code>, để “Dell” chạm được “Dell Technologies”)
+      → vector similarity ≥ 0.66. Mỗi seed ghi lại nó được giải bằng tầng nào, nên khi hệ trả lời sai
+      ta biết ngay là lỗi <em>seed</em> hay lỗi <em>đồ thị</em>.</li>
+    <li><b>BFS 2 hop</b> quanh seed, thu thập cạnh kèm provenance.</li>
+    <li><b>Linearize</b> thành văn bản có trích dẫn, ghép với vector context thành prompt hybrid.</li>
+  </ol>
+
+  <h3>Super-node mitigation</h3>
+  <p>Trong tin tức, các node như Google/Microsoft nối tới hàng nghìn thực thể. Nếu BFS mở hết, context nổ
+    và tín hiệu bị nhấn chìm. Chính sách ba lớp:</p>
+<pre>degree = node_degree(node_id)
+if degree &gt; SUPER_NODE_DEGREE:        <span class="c"># 100</span>
+    limit = min(limit, SUPER_NODE_EDGE_CAP)   <span class="c"># 50 cạnh MỚI NHẤT</span>
+...
+while frontier and len(collected) &lt; GLOBAL_EDGE_CAP:   <span class="c"># 250</span>
+...
+if used + len(line) &gt; MAX_GRAPH_CONTEXT_CHARS: break   <span class="c"># 14.000 ký tự</span></pre>
+  <p>Ưu tiên <code>published_date DESC</code> là một đánh đổi có chủ đích: giữ thông tin thời sự,
+    chấp nhận rủi ro cắt mất quan hệ lịch sử — nên câu hỏi kiểu “năm 2019 công ty này mua gì” sẽ dễ trượt.
+    Top-3 node bậc cao nhất trong đồ thị lần chạy này:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Thực thể</th><th>Loại</th><th>Degree</th></tr></thead>
+    <tbody><tr><td>Microsoft</td><td>Company</td><td class='n'>21</td></tr><tr><td>Amazon</td><td>Company</td><td class='n'>12</td></tr><tr><td>L&amp;T Technology Services</td><td>Company</td><td class='n'>7</td></tr></tbody>
+  </table></div>
+</section>
+
+<section id="m5">
+  <h2><span class="num">08 — Module 5</span>Đánh giá: hai loại thước đo</h2>
+  <p class="section-lede">Điểm của LLM giám khảo là thước đo chủ quan. Ghép thêm một thước đo khách quan
+    thì mới tách được lỗi truy hồi khỏi lỗi sinh câu trả lời.</p>
+
+  <p><b>LLM-as-a-Judge</b> chấm 1–5 trên ba trục — <em>comprehensiveness</em> (đủ ý),
+    <em>faithfulness</em> (mọi khẳng định có trong context), <em>multi-hop reasoning</em> (đúng chuỗi và
+    thứ tự các chặng) — với <code>reference_answer</code> làm mốc đúng.</p>
+
+  <p><b>Evidence Recall</b> là phần bổ sung: mỗi câu hỏi vàng biết chính xác nó cần chunk nào
+    (<code>evidence_row_ids</code> → <code>row02532::c0000</code>). Ta đo tỉ lệ chunk đó thực sự
+    xuất hiện trong ngữ cảnh mà hệ thống lấy về:</p>
+<pre>flat_recall  = |gold ∩ chunk Flat lấy về|      / |gold|
+graph_recall = |gold ∩ (chunk từ cạnh ∪ vector)| / |gold|</pre>
+  <p>Nhờ đó khi một câu trả lời sai, ta phân loại được ngay: <b>recall = 0</b> nghĩa là hỏng ở khâu
+    truy hồi; <b>recall = 1 nhưng điểm thấp</b> nghĩa là ngữ cảnh có đủ mà model đọc không ra.</p>
+</section>
+
+
+
+<section id="ket-qua">
+  <h2><span class="num">09 — Thực nghiệm</span>Bảng cân: chất lượng đổi lấy chi phí</h2>
+  <p class="section-lede">25 câu hỏi vàng, cùng một generator, cùng một judge. Chỉ khác ngữ cảnh đưa vào.</p>
+
+  <div class="tw"><table>
+    <thead>
+      <tr><th rowspan="2">Chỉ số</th>
+        <th colspan="2" style="text-align:center">factoid</th><th colspan="2" style="text-align:center">multi-hop</th><th colspan="2" style="text-align:center">cross-doc</th><th colspan="2" style="text-align:center">Toàn bộ</th></tr>
+      <tr><th style="text-align:right">Flat</th><th style="text-align:right">Graph</th><th style="text-align:right">Flat</th><th style="text-align:right">Graph</th><th style="text-align:right">Flat</th><th style="text-align:right">Graph</th><th style="text-align:right">Flat</th><th style="text-align:right">Graph</th></tr>
+    </thead>
+    <tbody><tr><td>Comprehensiveness</td><td class='n'>5.00</td><td class='n'>5.00</td><td class='n'>3.83</td><td class='n g'>4.25</td><td class='n'>3.64</td><td class='n g'>4.36</td><td class='n'>3.84</td><td class='n g'>4.36</td></tr><tr><td>Faithfulness</td><td class='n'>5.00</td><td class='n'>5.00</td><td class='n f'>3.92</td><td class='n'>3.83</td><td class='n'>3.36</td><td class='n g'>4.18</td><td class='n'>3.76</td><td class='n g'>4.08</td></tr><tr><td>Multi-hop reasoning</td><td class='n'>5.00</td><td class='n'>5.00</td><td class='n'>3.58</td><td class='n g'>4.17</td><td class='n'>2.64</td><td class='n g'>3.91</td><td class='n'>3.28</td><td class='n g'>4.12</td></tr><tr><td>Evidence recall</td><td class='n'>1.00</td><td class='n'>1.00</td><td class='n'>0.77</td><td class='n g'>0.86</td><td class='n'>0.73</td><td class='n g'>0.95</td><td class='n'>0.77</td><td class='n g'>0.91</td></tr><tr><td>Latency (s)</td><td class='n f'>1.25</td><td class='n'>1.86</td><td class='n'>2.33</td><td class='n g'>2.27</td><td class='n'>2.26</td><td class='n g'>2.10</td><td class='n'>2.21</td><td class='n g'>2.16</td></tr><tr><td>Token usage</td><td class='n f'>718</td><td class='n'>931</td><td class='n f'>713</td><td class='n'>1127</td><td class='n f'>681</td><td class='n'>1063</td><td class='n f'>699</td><td class='n'>1083</td></tr></tbody>
+  </table></div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="v">+0.52</div><div class="l">Δ đầy đủ</div></div>
+    <div class="stat"><div class="v">+0.32</div><div class="l">Δ trung thực</div></div>
+    <div class="stat"><div class="v">+0.84</div><div class="l">Δ multi-hop</div></div>
+    <div class="stat"><div class="v">+0.14</div><div class="l">Δ evidence recall</div></div>
+    <div class="stat"><div class="v">-0.05s</div><div class="l">Δ độ trễ</div></div>
+    <div class="stat"><div class="v">+384.16</div><div class="l">Δ token</div></div>
+  </div>
+
+  
+  <p>Ba điều đọc được từ bảng này:</p>
+  <ol>
+    <li><b>Lợi ích tỉ lệ thuận với số chặng suy luận.</b> Multi-hop reasoning: factoid hoà 5.00/5.00,
+      multi-hop +0.58, cross-doc <b>+1.27</b>. GraphRAG không làm mọi câu tốt hơn — nó làm tốt hơn đúng
+      loại câu mà vector search không thể xử lý về mặt nguyên lý.</li>
+    <li><b>Độ trễ không phải cái giá.</b> Duyệt Neo4j 2 hop mất khoảng 50–150 ms, nhỏ hơn phương sai giữa
+      hai lượt gọi LLM. Cái giá thật là <b>token: 1,55×</b>, và chi phí offline (92 lượt LLM để dựng đồ thị).</li>
+    <li><b>Với factoid, GraphRAG chỉ tốn thêm tiền.</b> Chất lượng hoà tuyệt đối nhưng token +30%.
+      Đây là lập luận định lượng cho việc <b>định tuyến truy vấn</b> — factoid đi nhánh Flat, multi-hop và
+      cross-doc đi nhánh Graph — thay vì dùng GraphRAG cho mọi câu.</li>
+  </ol>
+  <div class="callout"><b>Lưu ý về tính công bằng của phép đo:</b> cả hai kiến trúc dùng
+    <b>chung một generator</b> (<code>gpt-4o-mini</code>) và <b>chung một judge</b>. Biến duy nhất thay đổi là
+    ngữ cảnh đưa vào prompt. Generator và judge cùng model nên có thể có thiên vị tự chấm — nhưng thiên vị đó
+    áp dụng như nhau cho cả hai nhánh, và <b>Evidence Recall là thước đo độc lập</b> không phụ thuộc judge,
+    xác nhận cùng chiều kết luận (0.77 → 0.91).</div>
+
+</section>
+
+
+
+<section id="that-bai">
+  <h2><span class="num">10 — Chẩn đoán</span>Hai ca lỗi, hai loại nguyên nhân khác nhau</h2>
+  <p class="section-lede">Điểm của LLM giám khảo cho biết <em>câu nào sai</em>. Evidence Recall cho biết
+    <em>sai ở đâu</em> — và hai ca dưới đây rơi vào hai tầng hoàn toàn khác nhau của hệ thống.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Dấu hiệu</th><th>Evidence recall</th><th>Điểm judge</th><th>Chẩn đoán</th></tr></thead>
+    <tbody>
+      <tr><td>Không lấy được bằng chứng</td><td class="n">thấp</td><td class="n">thấp</td>
+        <td>Hỏng ở <b>truy hồi</b></td></tr>
+      <tr><td>Có đủ bằng chứng mà vẫn sai</td><td class="n">1.00</td><td class="n">thấp</td>
+        <td>Hỏng ở <b>mô hình hoá dữ liệu</b> hoặc sinh câu trả lời</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Ca 1 — Flat RAG trượt, GraphRAG thắng (<code>G5000-43</code>, cross-doc, Δ = +10)</h3>
+  <blockquote>Which came first in the selected HPE timeline: the Axis Security acquisition agreement
+    or the LLM-focused cloud service announcement?</blockquote>
+
+  <p>Đây là câu hỏi <b>về thứ tự thời gian</b> giữa hai sự kiện nằm ở hai bài báo. Flat RAG lấy được bài
+    Axis Security (02/03/2023) nhưng <b>không lấy được</b> bài dịch vụ cloud LLM (21/06/2023) — vì bài đó
+    không chứa từ <em>acquisition</em> hay <em>Axis</em>, nên cosine với câu hỏi thấp hơn các chunk khác.
+    Evidence recall = 0.50.</p>
+
+  <p>Câu trả lời của nó tự tố cáo chính nó: thừa nhận <em>“the LLM-focused cloud service announcement is not
+    explicitly mentioned”</em> rồi vẫn kết luận về chiến lược của HPE. Giám khảo chấm 2/2/2 và ghi rõ
+    <em>“makes unsupported claims … without evidence”</em>.</p>
+
+  <p>GraphRAG khớp seed <code>HPE</code> vào node <code>Hewlett Packard Enterprise</code> qua alias thủ công,
+    rồi BFS thu về đúng hai cạnh — mỗi cạnh mang <code>published_date</code> như một <b>trường dữ liệu</b>:</p>
+
+<pre>Hewlett Packard Enterprise -ACQUIRED-&gt; Axis Security
+    | date=<span class="k">2023-03-02</span> | chunk=row04762::c0000
+
+Hewlett Packard Enterprise -USES-&gt; supercomputers
+    | date=<span class="k">2023-06-21</span> | chunk=row03289::c0000</pre>
+
+  <p>Sắp xếp thời gian trở thành thao tác dữ liệu, không còn phụ thuộc vào việc mô hình có “nhìn thấy” cả hai
+    đoạn văn hay không. Judge: 5/5/5.</p>
+
+  <div class="callout"><b>Bài học:</b> loại câu hỏi GraphRAG thắng đậm không phải “câu khó”, mà là câu có
+    <b>ràng buộc quan hệ hoặc thời gian trải trên nhiều tài liệu</b>. Số liệu theo nhóm xác nhận: cross-doc
+    chênh lệch multi-hop reasoning +1.27, còn factoid hoà tuyệt đối 5.00/5.00.</div>
+
+  <h3>Ca 2 — GraphRAG thua (<code>G5000-28</code>, multi-hop, Δ = −5)</h3>
+  <blockquote>Which model providers are connected to Google Cloud Next '23, and which models are associated
+    with each provider?</blockquote>
+
+  <p><b>Cả hai hệ đều có evidence recall = 1.00</b> — chunk bằng chứng nằm trong ngữ cảnh của cả hai. Vậy mà
+    Flat RAG trả lời đúng hoàn toàn, còn GraphRAG <b>gán sai Llama 2 cho Google</b>. Nhìn vào subgraph là thấy
+    ngay lý do:</p>
+
+<pre>Google Cloud -USES-&gt; Code Llama  | evidence=availability of Code Llama <span class="k">from Meta</span>
+Google Cloud -USES-&gt; Claude 2    | evidence=pre-announcing Claude 2 <span class="k">from Anthropic</span>
+Google Cloud -USES-&gt; Falcon LLM  | evidence=<span class="k">Technology Innovative Institute's</span> Falcon LLM
+Google Cloud -USES-&gt; Llama 2     | evidence=Google Cloud is announcing availability of Llama 2</pre>
+
+  <p>Quan hệ thực tế trong dữ liệu là một <b>bộ ba</b>: <em>(nhà cung cấp) → (mô hình) → (nền tảng phân phối)</em>.
+    Nhưng allowlist 8 quan hệ không có loại nào diễn đạt “Meta sở hữu Llama 2”. Mô hình buộc phải ép mọi thứ vào
+    <code>USES</code>, và trong phép ép đó <b>chủ thể sở hữu bị đẩy khỏi cấu trúc, rơi xuống trường văn bản tự do
+    <code>evidence</code></b> — nơi mô hình sinh câu trả lời không được yêu cầu đọc kỹ. Ở cạnh thứ tư thì thông tin
+    đó không tồn tại ở đâu cả.</p>
+
+  <div class="callout"><b>Nghịch lý đáng chú ý:</b> schema allowlist vừa là cơ chế phòng vệ vừa là nguồn gây mất
+    thông tin. Nó chặn được rác, nhưng khi thực tế phong phú hơn schema, nó tạo ra những cạnh
+    <b>đúng cú pháp mà sai ngữ nghĩa</b> — loại lỗi khó phát hiện hơn hẳn lỗi crash. Flat RAG không dính lỗi này
+    chính vì nó không mô hình hoá gì cả: câu văn gốc đã nói rõ “Code Llama <em>from Meta</em>”.</div>
+
+  <p><b>Khắc phục:</b> thêm quan hệ <code>OFFERS</code>/<code>DISTRIBUTES</code> tách khỏi <code>DEVELOPED</code>;
+    ràng buộc prompt sinh <b>hai</b> cạnh khi gặp mẫu <em>“X from Y”</em>; đưa chính câu này vào bộ kiểm thử hồi quy.</p>
+
+  <h3>Ca 3 — seed nghèo làm BFS xuất phát sai chỗ (<code>G5000-30</code>)</h3>
+  <p>Evidence recall của GraphRAG = <b>0.00</b> — thấp nhất trong 25 câu. Câu hỏi cố ý <b>không nêu thực thể thứ hai</b>
+    (“hai bối cảnh AI khác nhau của Meta” là thứ hệ thống phải tự tìm). Seed extraction chỉ rút được
+    <code>Meta</code>, BFS xuất phát từ một điểm duy nhất và 3 cạnh thu được đều không thuộc chunk bằng chứng.</p>
+
+  <p>GraphRAG <b>kế thừa toàn bộ điểm yếu của bước seed extraction</b>. Câu hỏi khám phá (“có những gì…”) khác hẳn
+    câu hỏi xác minh (“X có quan hệ gì với Y”): nó cần entry point rộng — lấy top-N chunk bằng vector trước, rút
+    thực thể từ chính các chunk đó rồi mới làm seed. Đây cũng là động lực của hai bonus ở phần sau.</p>
+</section>
+
+
+<section id="failure">
+  <h2><span class="num">11 — Phòng vệ</span>Bốn chế độ hỏng và cách chặn</h2>
+  <p class="section-lede">Phần này là nơi rubric đặt 20 điểm — và cũng là phần phân biệt đồ án production
+    với demo chạy được một lần.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Chế độ hỏng</th><th>Biểu hiện</th><th>Cơ chế chặn trong notebook</th><th>Bằng chứng</th></tr></thead>
+    <tbody>
+      <tr><td><b>False coreference</b></td>
+        <td>“The company” bị gán sai chủ thể → cạnh sai lan sang mọi câu trả lời multi-hop</td>
+        <td>Prompt bảo thủ + rule-gate: chỉ chunk có đại từ mới gọi LLM; mơ hồ thì giữ nguyên</td>
+        <td>114/400 chunk bị sửa; 0 node rác dạng “The company” trong đồ thị</td></tr>
+      <tr><td><b>False merge thực thể</b></td>
+        <td><code>Apple</code> nuốt <code>Apple Watch</code>; hai người trùng họ bị gộp</td>
+        <td>Lexical Guard sau vector ANN; bảng audit ghi rõ lý do gộp/từ chối</td>
+        <td>23 dòng audit + probe 10 cặp bẫy; <code>generative AI</code> vs <code>Generative AI Capabilities</code> cosine 0.856 bị chặn; <code>Sam Altman</code>/<code>Steve Altman</code> ratio 0.727 lọt guard nhưng bị ngưỡng cosine chặn</td></tr>
+      <tr><td><b>Super-node explosion</b></td>
+        <td>Node như Google nối hàng nghìn cạnh → context nổ, token tăng vọt, nhiễu át tín hiệu</td>
+        <td>Cắt 50 cạnh mới nhất khi degree &gt; 100, trần toàn cục 250 cạnh, trần 14k ký tự</td>
+        <td>degree thật 21 &lt; 100 nên hạ ngưỡng tạm thời xuống 20 để kiểm chứng: cắt đúng cap; hop=3 thu 52 ≤ 250 cạnh, context 11,484 ≤ 14.000 ký tự</td></tr>
+      <tr><td><b>Mất provenance</b></td>
+        <td>Cạnh không biết đến từ đâu → không kiểm chứng được, không sắp xếp theo thời gian được</td>
+        <td>Bắt buộc 4 thuộc tính trên mọi cạnh + Cypher check chặn cả NULL lẫn chuỗi rỗng</td>
+        <td><b>0</b> cạnh thiếu provenance trên tổng 271 cạnh (kiểm cả NULL lẫn chuỗi rỗng)</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+
+<section id="bonus">
+  <h2><span class="num">12 — Mở rộng</span>Ba bonus, và chúng vá điểm yếu nào</h2>
+  <p class="section-lede">Mỗi bonus được chọn vì nó vá đúng một điểm yếu đã lộ ra ở phần phân tích ca lỗi,
+    chứ không phải vì nó có trong danh sách.</p>
+
+  <h3>Self-Correction — vá điểm yếu “seed nghèo”</h3>
+  <p>Thay vì mở rộng bán kính cho mọi câu (tốn token, tăng nhiễu), hệ hỏi mô hình
+    <em>“ngữ cảnh này đã đủ chưa?”</em> rồi mới quyết định leo thang:
+    <code>hop2 → hop3 → hop3 + vector</code>. Chạy trên 3 câu GraphRAG chấm thấp nhất:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Câu</th><th>Nhóm</th><th>Route cuối</th><th>Cạnh trước</th><th>Cạnh sau</th>
+      <th>Judge trước</th><th>Judge sau</th><th>Δ</th></tr></thead>
+    <tbody><tr><td>G5000-33</td><td>cross-doc</td><td><code>hop2</code></td><td class='n'>8</td><td class='n'>8</td><td class='n'>5</td><td class='n g'>5</td><td class='n'>+0</td></tr><tr><td>G5000-30</td><td>multi-hop</td><td><code>hop2</code></td><td class='n'>3</td><td class='n'>3</td><td class='n'>6</td><td class='n g'>3</td><td class='n'>-3</td></tr><tr><td>G5000-50</td><td>multi-hop</td><td><code>hop3+vector</code></td><td class='n'>11</td><td class='n'>11</td><td class='n'>8</td><td class='n g'>10</td><td class='n'>+2</td></tr></tbody>
+  </table></div>
+  <p>Tổng điểm judge thay đổi <b>-1</b>. Đáng chú ý là dòng giữ nguyên <code>hop2</code>: mô hình tự đánh giá
+    ngữ cảnh đã đủ nên không leo thang — và điểm <em>giảm</em>. Nghĩa là bộ đánh giá tính đầy đủ cũng có thể sai;
+    cơ chế này không phải thuốc chữa bách bệnh.</p>
+
+  <h3>Community Detection — vá điểm yếu “câu hỏi vĩ mô”</h3>
+  <p>BFS quanh seed chỉ trả lời được câu hỏi <em>cục bộ</em>. Với câu như “các chủ đề chính của cuộc cạnh tranh AI
+    trong kho tin này là gì”, không seed nào là điểm xuất phát đúng. Giải pháp: phân cụm đồ thị bằng
+    greedy modularity, rồi để LLM viết một <b>community report</b> cho mỗi cụm lớn — câu hỏi vĩ mô đọc report
+    thay vì duyệt cạnh.</p>
+  <div class="tw"><table>
+    <thead><tr><th>#</th><th>Chủ đề &amp; thực thể chính</th><th>Cạnh</th></tr></thead>
+    <tbody><tr><td class='n'>0</td><td><b>Microsoft and AI Innovations</b><div style='font-size:13px;color:var(--ink-3)'>Microsoft, SAP, KPMG, Dell Technologies Inc., Satya Nadella</div></td><td class='n'>27</td></tr><tr><td class='n'>1</td><td><b>AI and Cloud Innovations</b><div style='font-size:13px;color:var(--ink-3)'>Google, Amazon, IBM, Bard AI, Gemini, Cohere, Falco, DataCenter</div></td><td class='n'>21</td></tr><tr><td class='n'>2</td><td><b>Technology Partnerships in Telecommunications and Security</b><div style='font-size:13px;color:var(--ink-3)'>L&T Technology Services, Thales, Qualcomm, Palo Alto Networks, Ansys, Airbus, MTM Technology, Campina Grande's City Hall</div></td><td class='n'>12</td></tr><tr><td class='n'>3</td><td><b>Amazon Web Services Community</b><div style='font-size:13px;color:var(--ink-3)'>Amazon Web Services, Olivia Igbokwe-Curry, Hugging Face, Cerro Coso Community College, eCloudvalley, Advanced Micro Devices AI chips</div></td><td class='n'>7</td></tr><tr><td class='n'>4</td><td><b>Samsung and Partners in Smart Technology</b><div style='font-size:13px;color:var(--ink-3)'>Samsung, Aqara, FP2 Presence Sensor, SmartThings Platform, OLED display with embedded heart rate sensor, CDW, First Tee</div></td><td class='n'>8</td></tr></tbody>
+  </table></div>
+
+  <h3>Near-dedup MinHash + LSH — vá điểm yếu “thiên lệch theo mật độ đưa tin”</h3>
+  <p>Exact dedup bằng SHA-1 chỉ bắt được bản sao byte-identical. Tin syndicated (Reuters → báo đăng lại) đổi vài từ
+    ở tiêu đề là hash đã khác — mỗi bản trùng là <b>một lượt gọi LLM lãng phí</b> và <b>một cạnh trùng</b> chiếm
+    slot trong cửa sổ 50 cạnh của super-node.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Bước lọc</th><th>Còn lại</th></tr></thead>
+    <tbody><tr><td>Dòng thô (5.000 dòng đầu)</td><td class='n'>5,000</td></tr><tr><td>Sau lọc snippet &lt; 120 ký tự</td><td class='n'>2,687</td></tr><tr><td>Sau exact dedup (SHA-1)</td><td class='n'>2,114</td></tr><tr><td>Sau near-dedup (MinHash + LSH)</td><td class='n'>2,090</td></tr></tbody>
+  </table></div>
+  <p>Ví dụ cặp bắt được: <code>Sensormatic Solutions by Johnson Controls shares 2022 U.S. Super Satur</code> ↔ <code>Sensormatic Solutions by Johnson Controls shares 2022 U.S. Super Satur</code> (Jaccard 1.00) — khác nhau đúng một ký tự ®.</p>
+  <p>Điểm kỹ thuật đáng nói là <b>chi phí</b>: banding 24 band × 4 row trên chữ ký 96 hash chỉ so
+    <b>1.128 cặp</b> thay vì 2.232.241 cặp của pairwise cosine — giảm gần 2.000 lần. Đây chính là đề xuất
+    O(N²) bị từ chối khi xây pipeline.</p>
+</section>
+
+
+<section id="chay">
+  <h2><span class="num">13 — Vận hành</span>Chạy lại và xem demo</h2>
+
+  <h3>Chạy lại notebook</h3>
+<pre><span class="c"># 1. cài môi trường (đã có sẵn .venv trong repo)</span>
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+<span class="c"># 2. điền .env: NEO4J_*, GROQ_API_KEY, OPENAI_API_KEY, HF_TOKEN</span>
+copy .env.example .env
+
+<span class="c"># 3. Run All — mọi bước nặng đều có cache trên đĩa (data/cache/)</span>
+.\.venv\Scripts\jupyter.exe lab Day19_GraphRAG_vs_FlatRAG_Production_Lab_Guide.ipynb</pre>
+
+  <h3>Giao diện demo</h3>
+  <p>Repo có sẵn một console demo đọc <code>outputs/demo_data.json</code> và có thể hỏi trực tiếp
+    vào pipeline thật:</p>
+<pre>.\.venv\Scripts\python.exe demo\serve_demo.py   <span class="c"># → http://127.0.0.1:8019</span></pre>
+  <ul>
+    <li><b>So sánh 25 câu hỏi</b> — chọn câu bất kỳ, xem cạnh tuyến tính hoá của GraphRAG và top-6 chunk của
+      Flat RAG, kèm điểm judge và chunk bằng chứng vàng được tô sáng.</li>
+    <li><b>Knowledge Graph</b> — subgraph tương tác, kích thước node theo degree, bấm node để xem cạnh.</li>
+    <li><b>Entity Resolution</b> — bảng audit và thí nghiệm độ nhạy ngưỡng.</li>
+    <li><b>Hỏi trực tiếp</b> — gõ câu hỏi mới, hệ chạy Neo4j + LLM thật và trả về cả hai câu trả lời.</li>
+  </ul>
+
+  <h3>Tệp kết quả</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Đường dẫn</th><th>Nội dung</th></tr></thead>
+    <tbody>
+      <tr><td><code>outputs/graphrag_eval_results.csv</code></td><td>25 câu × điểm judge, latency, token, evidence recall</td></tr>
+      <tr><td><code>outputs/graphrag_vs_flatrag_summary.csv</code></td><td>bảng so sánh theo nhóm câu hỏi</td></tr>
+      <tr><td><code>outputs/entity_resolution_audit.csv</code></td><td>toàn bộ quyết định gộp/từ chối thực thể</td></tr>
+      <tr><td><code>outputs/eval_traces.json</code></td><td>trace retrieval từng câu (chunk, cạnh, seed)</td></tr>
+      <tr><td><code>outputs/demo_data.json</code></td><td>dữ liệu cho giao diện demo</td></tr>
+      <tr><td><code>reports/lab_report.md</code></td><td>báo cáo thuyết minh + reflection</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</article>
+</div>
+
+<footer><div class="wrap">Lab 19 · GraphRAG vs Flat RAG — Dương Ngọc Hải · 2A202601748 ·
+  dữ liệu sinh tự động từ notebook ngày 2026-08-19</div></footer>
